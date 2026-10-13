@@ -57,9 +57,26 @@ wggesucht logout
 ## Befehle
 
 ```text
-wggesucht search --city CITY [--max-rent N] [--min-size N]
-                 [--rooms {wg,1zimmer,wohnung,haus}]
-                 [--radius KM] [--limit N] [--json]
+wggesucht search --city CITY [--rooms {wg,1zimmer,wohnung,haus}]
+                 [--min-rent N] [--max-rent N]
+                 [--min-size N] [--max-size N] [--radius METER]
+                 [--move-in-from YYYY-MM-DD] [--move-in-to YYYY-MM-DD]
+                 [--rent-type 1,2,3]            # 1=befristet 2=unbefristet 3=Übernachtung
+                 [--wg-gender {1,2,4,5}]        # 1=Frau 2=Mann 4=Divers 5=k.A.
+                 [--wg-searched-gender {1,2,3,4}]
+                 [--flatmate-age-min N] [--flatmate-age-max N]
+                 [--min-flatmates N] [--max-flatmates N]
+                 [--flatshare-type 1,2,6,12,16,19]   # IDs aus dem wg-gesucht-Formular
+                 [--furnished {1,2}]            # 1=ja 2=nein
+                 [--smoking {1,2,3,4}]          # 1=erlaubt 2=nicht 3=eigenes Zimmer 4=Balkon
+                 [--pets-allowed {1,2}] [--pets-present {1,2}]
+                 [--kitchen {1,2}]
+                 [--district "Altstadt"] [--district-id 85215,1955]
+                 [--since 1..7]                 # 1=3T 2=1W 3=2W … 7=3M
+                 [--exchange {1,2}]
+                 [--floor N]
+                 [--handicapped] [--balcony] [--garden] [--online-tour]
+                 [--images-only] [--limit N] [--json]
 wggesucht show OFFER_ID_OR_URL [--json]
 WG_EMAIL=… WG_PASSWORD=… wggesucht login [--json]
 wggesucht logout [--json]
@@ -69,6 +86,11 @@ wggesucht messages send --to OFFER_OR_USER --text "..." --confirm [--json]
 wggesucht --version
 wggesucht --help
 ```
+
+Die `--flatshare-type`-IDs entsprechen der Live-Drop-down-Liste:
+`0=Zweck-WG`, `1=Studenten-WG`, `2=Frauen-WG`, `6=Berufstätigen-WG`,
+`11=keine Zweck-WG`, `12=gemischte WG`, `16=LGBTQIA+`,
+`19=Internationals welcome`. Mehrere IDs per Komma.
 
 ## Beispiele
 
@@ -82,6 +104,33 @@ wggesucht search --city Berlin --max-rent 600 --limit 3 --json
 
 ```bash
 wggesucht search --city Muenchen --rooms 1zimmer --min-size 30 --limit 5 --json
+```
+
+Heilbronn, möbliert, Einzug November 2026 – Januar 2027, mind. 3 Mitbewohner:
+
+```bash
+wggesucht search --city Heilbronn --furnished 1 \
+  --move-in-from 2026-11-01 --move-in-to 2027-01-31 \
+  --min-flatmates 3 --json
+```
+
+Studenten-WG in Frankfurt, Rauchen nicht erwünscht, 22–30 Jahre:
+
+```bash
+wggesucht search --city Frankfurt --flatshare-type 1 \
+  --smoking 2 --flatmate-age-min 22 --flatmate-age-max 30 --json
+```
+
+WG in Köln-Altstadt (Stadtteil-ID via Form, Substring-Filter ohne ID):
+
+```bash
+wggesucht search --city Koeln --district "Altstadt" --json
+```
+
+Befristet, Tauschwohnung ausgeschlossen, nur Anzeigen mit Bildern:
+
+```bash
+wggesucht search --city Berlin --rent-type 1 --exchange 2 --images-only --json
 ```
 
 Anzeige 4668942 ansehen:
@@ -123,7 +172,10 @@ wggesucht messages send --to 4668942 --text "…"
   Prompts/Status gehen auf stderr.
 - `id`/`url`/`stadt`/`stadtteil`/`strasse`/`kaltmiete_euro`/
   `groesse_qm`/`verfuegbar_ab`/`verfuegbar_bis`/`typ`/
-  `beschreibung_text` in `snake_case`.
+  `beschreibung_text` in `snake_case`. Bei Listen-Treffern
+  zusätzlich pro Angebot: `mitbewohner_anzahl`,
+  `mitbewohner_maennlich`/`_weiblich`/`_divers`,
+  `mitbewohner_alter_text`, `moebliert`, `rauchen`.
 - Beträge in Euro als Integer; Größe in m² als Integer.
 - Datumsangaben ISO-8601 (`YYYY-MM-DD`).
 - Fehler: `{"error": "...", "kind": "...", ...}` auf stderr,
@@ -159,9 +211,10 @@ pip install -e ".[dev]"
 python -m pytest tests/ -ra
 ```
 
-29 Tests (Stadt-Resolver, URL-Bau, Parser mit echten HTML-Fixtures
-aus `tests/fixtures/`, Session-Storage mit Cookie-Allowlist,
-Login-Beweis, Nachrichten-Endpoint-Stub, CLI-Smoke). Stand
+57 Tests (Stadt-Resolver, URL-Bau mit 19 echten wg-gesucht-Formular-
+Parametern, Parser mit echten HTML-Fixtures + synthetischer Suche,
+Session-Storage mit Cookie-Allowlist, Login-Beweis,
+Nachrichten-Endpoint-Stub, CLI-Smoke, alle Filter-Clients). Stand
 2026-10-13.
 
 Die Akzeptanztests in `tests/test_acceptance.py` starten das CLI

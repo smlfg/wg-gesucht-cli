@@ -41,5 +41,6 @@
   "Tuebingen": {"id": 135, "slug": "Tuebingen"},
   "Ulm": {"id": 138, "slug": "Ulm"},
   "Wuerzburg": {"id": 152, "slug": "Wuerzburg"},
-  "Wuppertal": {"id": 153, "slug": "Wuppertal"}
+  "Wuppertal": {"id": 153, "slug": "Wuppertal"},
+  "Heilbronn": {"id": 60, "slug": "Heilbronn"}
 }

@@ -140,24 +140,27 @@ def parse_search(html: str, *, limit: int = 20, room_type: str = "wg") -> list[d
                     stadtteil_text = " ".join(tokens[1:])
         if len(ort_parts) >= 3:
             strasse = ort_parts[2].strip() or None
-        # Miete / Größe / Verfügbarkeit
+        # Miete / Größe / Verfügbarkeit. Wir betrachten nur die direkten
+        # Kinder des Cards mit class="row" (Titel/Adresse/Mitte/Unten),
+        # keine rekursiv verschachtelten divs, damit z. B. "0m" aus
+        # "title=2er WG (0w,0m,…)" oder "mdi-20px" nicht als Größe
+        # erkannt werden.
         rent = None
         size = None
         avail_from = None
         avail_to = None
-        # Suche nach "row middle" für Miete+Größe+Daten
-        for div in card.find_all("div", class_=re.compile(r"\brow\b")):
+        for div in card.find_all("div", class_=re.compile(r"\brow\b"), recursive=False):
             inner_html = div.decode_contents()
-            if "&euro;" in inner_html or "€" in inner_html:
+            if rent is None and ("&euro;" in inner_html or "€" in inner_html):
                 m = re.search(r"(\d[\d.,]*)\s*(?:&euro;|€)", inner_html)
-                if m and rent is None:
+                if m:
                     rent = _eur_to_int(m.group(1))
-            if "m&sup2;" in inner_html or "m²" in inner_html:
-                m = re.search(r"(\d[\d.,]*)\s*m", inner_html)
-                if m and size is None:
+            if size is None and ("m&sup2;" in inner_html or "m²" in inner_html):
+                m = re.search(r"(\d[\d.,]*)\s*(?:m&sup2;|m²)", inner_html)
+                if m:
                     size = _qm_to_int(m.group(1))
             dates = re.findall(r"(\d{2}\.\d{2}\.\d{4})", inner_html)
-            if len(dates) >= 2 and ("-" in inner_html or "–" in inner_html):
+            if len(dates) >= 2 and ("-" in inner_html or "–" in inner_html or "&ndash;" in inner_html):
                 if avail_from is None:
                     avail_from = _parse_date(dates[0])
                 avail_to = _parse_date(dates[1])
@@ -171,6 +174,57 @@ def parse_search(html: str, *, limit: int = 20, room_type: str = "wg") -> list[d
                     size = _qm_to_int(t)
                     if size is not None:
                         break
+        # Mitbewohner-Infos: Anzahl, Geschlecht, Alter – werden in
+        # <span class="noprint">…</span> oder direkt im Body angezeigt,
+        # z. B. "3er WG | Frau | 24 Jahre" oder "2er WG | 2 Männer, 1 Frau".
+        flatmates_total = None
+        flatmates_male = None
+        flatmates_female = None
+        flatmates_diverse = None
+        flatmate_age_text = None
+        furnished_flag = None
+        smoking_flag = None
+        for tag in card.find_all(["span", "div"], class_=re.compile(r"noprint|row|vis-title|key_fact")):
+            txt = _text(tag)
+            if not txt:
+                continue
+            m = re.search(r"(\d+)\s*er\s*WG", txt)
+            if m and flatmates_total is None:
+                try:
+                    flatmates_total = int(m.group(1))
+                except ValueError:
+                    pass
+            mm = re.search(r"(\d+)\s*M[äa]nn(?:er)?", txt)
+            if mm and flatmates_male is None:
+                flatmates_male = int(mm.group(1))
+            mf = re.search(r"(\d+)\s*Frau(?:en)?", txt)
+            if mf and flatmates_female is None:
+                flatmates_female = int(mf.group(1))
+            md = re.search(r"(\d+)\s*Divers", txt, re.I)
+            if md and flatmates_diverse is None:
+                flatmates_diverse = int(md.group(1))
+            age_m = re.search(r"(\d{2})\s*(?:Jahre|J\.)\b", txt)
+            if age_m and flatmate_age_text is None:
+                flatmate_age_text = age_m.group(1)
+            if "möbliert" in txt.lower() and furnished_flag is None:
+                furnished_flag = "ja" if "möbliert" in txt.lower() and "nicht" not in txt.lower() else "nein"
+            if "rauchen" in txt.lower() and smoking_flag is None:
+                if "nicht" in txt.lower():
+                    smoking_flag = "nicht_erwuenscht"
+                elif "eigenen" in txt.lower() or "eigenes" in txt.lower():
+                    smoking_flag = "eigenes_zimmer"
+                elif "balkon" in txt.lower():
+                    smoking_flag = "balkon"
+                else:
+                    smoking_flag = "erlaubt"
+        # Fallback: "Xer WG" aus dem Ort-Text (z. B. "3er WG | …")
+        if flatmates_total is None and ort_text:
+            m = re.search(r"(\d+)\s*er\s*WG", ort_text)
+            if m:
+                try:
+                    flatmates_total = int(m.group(1))
+                except ValueError:
+                    pass
         results.append({
             "id": str(oid),
             "url": href,
@@ -183,6 +237,13 @@ def parse_search(html: str, *, limit: int = 20, room_type: str = "wg") -> list[d
             "verfuegbar_ab": avail_from,
             "verfuegbar_bis": avail_to,
             "typ": room_type,
+            "mitbewohner_anzahl": flatmates_total,
+            "mitbewohner_maennlich": flatmates_male,
+            "mitbewohner_weiblich": flatmates_female,
+            "mitbewohner_divers": flatmates_diverse,
+            "mitbewohner_alter_text": flatmate_age_text,
+            "moebliert": furnished_flag,
+            "rauchen": smoking_flag,
         })
         if len(results) >= limit:
             break

@@ -1,0 +1,56 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wg-gesucht-cli"
+version = "0.1.0"
+description = "wggesucht – Agent-CLI für wg-gesucht.de: Suche, Anzeigen-Details, Login, Posteingang lesen, Nachrichten senden (nur mit --confirm)."
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [{name = "smlfg"}]
+keywords = [
+    "wg-gesucht",
+    "wg",
+    "zimmer",
+    "wohnung",
+    "suche",
+    "cli",
+    "agent",
+    "scraper",
+]
+classifiers = [
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Topic :: Utilities",
+]
+dependencies = [
+    "requests>=2.31",
+    "beautifulsoup4>=4.12",
+    "lxml>=4.9",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+
+[project.scripts]
+wggesucht = "wggesucht_cli.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/smlfg/wg-gesucht-cli"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+wggesucht_cli = ["py.typed", "data/*.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"

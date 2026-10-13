@@ -1,17 +1,73 @@
-<html><body>
+<!DOCTYPE html>
+<html lang="de">
+<head><meta charset="utf-8"/><title>Nachricht - WG-Gesucht.de</title></head>
+<body>
 <nav>
   <a href="/nachrichten.html">Nachrichten</a>
   <a href="/mein-wg-gesucht/abmelden.html">Abmelden</a>
+  <span>max@example.org</span>
 </nav>
-<h1>WG-Zimmer in Berlin-Friedrichshagen</h1>
-<div class="message_row">
-  <div class="user_name">max@example.org</div>
-  <div class="date">11.10.2026 09:00</div>
-  <div class="text">Hi Lisa, ist das Zimmer noch frei?</div>
+
+<h1>WG-Gesucht - Nachrichten</h1>
+
+<div class="conversation_ad_card p20 mb50 font-xs-12px">
+  <div class="vertical-align-center justify-content-space-between">
+    <div style="flex: 0 1 auto;">
+      <span class="conversation_ad_card_title hidden-xs">WG-Zimmer in Berlin-Friedrichshagen</span>
+      <b>3er WG</b> <b>| 18m²</b> <b>| 450€</b>
+      <br>
+      <a class="wgg-btn-link wgg-btn-link-blue wgg-btn-link-sm"
+         href="/wg-zimmer-in-Berlin-Friedrichshagen.9876543.html" target="_blank"><b>Zur Anzeige</b></a>
+    </div>
+    <div style="flex: 0 0 auto;">
+      <div class="vertical-align-center">
+        <img class="avatar cursor-pointer conversation_ad_card_avatar"
+             src="/img/lisa.jpg" alt="">
+        <div class="ml10">
+          <b>Lisa M.</b><br>Mitglied seit: März 2024
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
-<div class="message_row">
-  <div class="user_name">Lisa M.</div>
-  <div class="date">12.10.2026 10:34</div>
-  <div class="text">Ja, komm doch am Samstag vorbei.</div>
+
+<div id="messages_container" class="position-relative">
+  <h1 class="sr-only">Unterhaltung mit Lisa M.</h1>
+
+  <div class="last_message_selector mb20">
+    <div class="row">
+      <div class="col-xs-10 col-sm-11">
+        <div id="last_message_id_1700000101" class="message my_message mb5">
+          <div class="message_content message_text" data-user_id="99999999">
+Hi Lisa, ist das Zimmer noch frei?
+          </div>
+        </div>
+        <div class="message_timestamp latest_message_timestamp text-right">
+          11.10.2026 09:00
+          <span class="mdi mdi-check-all mdi-pad latest_my_message_timestamp"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="last_message_selector mb20">
+    <div class="row">
+      <div class="col-xs-12 col-sm-1">
+        <img class="conversation_profile_image cursor-pointer mini_profile mb10"
+             src="/img/lisa.jpg" alt="" data-user_id="12345678">
+      </div>
+      <div class="col-xs-10 col-sm-11">
+        <div id="last_message_id_1700000102" class="message border-rounded-5px mb10">
+          <div class="message_content message_text " data-user_id="12345678">
+Ja, komm doch am Samstag vorbei.
+          </div>
+        </div>
+        <div class="message_timestamp latest_message_timestamp">
+          12.10.2026 10:34
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
-</body></html>
+</body>
+</html>

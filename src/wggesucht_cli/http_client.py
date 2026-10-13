@@ -88,9 +88,16 @@ class HttpClient:
         )
 
     def post(self, url: str, *, data: Mapping[str, Any] | None = None,
+             json: Any = None,
              allow_redirects: bool = True) -> Response:
         try:
-            r = self._session.post(url, data=data, timeout=self.timeout, allow_redirects=allow_redirects)
+            r = self._session.post(
+                url,
+                data=data,
+                json=json,
+                timeout=self.timeout,
+                allow_redirects=allow_redirects,
+            )
         except requests.RequestException as e:
             raise HTTPError(f"POST {url} failed: {e}", url=url) from e
         return Response(

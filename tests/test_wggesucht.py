@@ -68,8 +68,9 @@ class FakeHttp:
         status, text = v
         return FakeResp(status=status, text=text, url=url)
 
-    def post(self, url, *, data=None, allow_redirects=True):
-        self.calls.append(("POST", url, dict(data or {})))
+    def post(self, url, *, data=None, json=None, allow_redirects=True):
+        body = data if data is not None else json
+        self.calls.append(("POST", url, {"body": body}))
         if url not in self.routes:
             raise HTTPError(f"unexpected POST {url}", url=url)
         v = self.routes[url]
@@ -246,28 +247,62 @@ def test_login_succeeds_and_saves_session(tmp_path, login_html, nachrichten_html
     p = tmp_path / "session.json"
     monkeypatch.setattr(auth, "session_path", lambda: str(p))
     routes = {
-        "https://www.wg-gesucht.de/mein-wg-gesucht.html": (200, login_html),
-        "https://www.wg-gesucht.de/mein-wg-gesucht.html?": (200, login_html),  # action POST
+        "https://www.wg-gesucht.de/?modal=sign_in": (200, login_html),
+        "https://www.wg-gesucht.de/ajax/sessions.php?action=login":
+            (200, json.dumps({
+                "access_token": "tk",
+                "expires_in": 3600,
+                "token_type": "Bearer",
+                "refresh_token": "rt",
+                "user_id": "42",
+                "dev_ref_no": "dev",
+                "csrf_token": "csrf",
+            })),
         "https://www.wg-gesucht.de/nachrichten.html": (200, nachrichten_html),
     }
-    # Anpassen: action ist "/mein-wg-gesucht.html" – relativer POST
     http = FakeHttp(routes)
     res = auth.login(http=http, env={"WG_EMAIL": "x@y.de", "WG_PASSWORD": "pw"}, store_path=str(p))
     assert res["ok"] is True
     assert res["user"] == "x@y.de"
+    assert res["user_id"] == "42"
     assert os.path.exists(str(p))
+
+
+def test_login_rejects_bad_credentials(tmp_path, login_html, monkeypatch):
+    p = tmp_path / "session.json"
+    monkeypatch.setattr(auth, "session_path", lambda: str(p))
+    routes = {
+        "https://www.wg-gesucht.de/?modal=sign_in": (200, login_html),
+        "https://www.wg-gesucht.de/ajax/sessions.php?action=login":
+            (401, json.dumps({
+                "type": "about:blank", "title": "Unauthorized",
+                "status": 401, "detail": "Invalid username and password combination",
+            })),
+    }
+    http = FakeHttp(routes)
+    with pytest.raises(AuthError):
+        auth.login(http=http, env={"WG_EMAIL": "x@y.de", "WG_PASSWORD": "BAD"},
+                   store_path=str(p))
+    assert not os.path.exists(str(p))
 
 
 def test_login_fails_without_proof(tmp_path, login_html, monkeypatch):
     p = tmp_path / "session.json"
     monkeypatch.setattr(auth, "session_path", lambda: str(p))
     routes = {
-        "https://www.wg-gesucht.de/mein-wg-gesucht.html": (200, login_html),
+        "https://www.wg-gesucht.de/?modal=sign_in": (200, login_html),
+        "https://www.wg-gesucht.de/ajax/sessions.php?action=login":
+            (200, json.dumps({
+                "access_token": "tk", "user_id": "42",
+                "refresh_token": "rt", "dev_ref_no": "d",
+                "csrf_token": "c",
+            })),
         "https://www.wg-gesucht.de/nachrichten.html": (200, "<html>nope</html>"),
     }
     http = FakeHttp(routes)
     with pytest.raises(AuthError):
-        auth.login(http=http, env={"WG_EMAIL": "x@y.de", "WG_PASSWORD": "pw"}, store_path=str(p))
+        auth.login(http=http, env={"WG_EMAIL": "x@y.de", "WG_PASSWORD": "pw"},
+                   store_path=str(p))
     # keine Session gespeichert
     assert not os.path.exists(str(p))
 
@@ -292,6 +327,78 @@ def test_messages_list(tmp_path, nachrichten_html, monkeypatch):
     res = messages.list_messages(http)
     assert res["anzahl"] >= 1
     assert res["threads"][0]["thread_id"] == "9123456"
+    # Drei Threads (Lisa+unread, Tom+gelesen, Sara+unread+gelöschte Anzeige)
+    tids = sorted(t["thread_id"] for t in res["threads"])
+    assert tids == ["9123456", "9123457", "9123458"]
+    lisa = next(t for t in res["threads"] if t["thread_id"] == "9123456")
+    assert lisa["absender"] == "Lisa M."
+    assert lisa["gelesen"] is False
+    assert lisa["datum"] == "2026-10-11"
+    tom = next(t for t in res["threads"] if t["thread_id"] == "9123457")
+    assert tom["gelesen"] is True
+    # relatives Datum ("vor 3 Tagen") ist OK, kann nicht in ISO gewandelt werden
+    assert tom["datum"] is None
+    sara = next(t for t in res["threads"] if t["thread_id"] == "9123458")
+    assert "Diese Anzeige wurde gelöscht" in (sara["subject"] or "")
+
+
+def test_parse_messages_list_handles_empty_html():
+    assert parser.parse_messages_list("") == []
+    assert parser.parse_messages_list("<html><body></body></html>") == []
+    # keine conversation_div-Selektoren → keine Threads
+    html = '<html><body><div data-conversation_id="11"></div></body></html>'
+    assert parser.parse_messages_list(html) == []
+
+
+def test_messages_read_thread(tmp_path, nachrichten_html, thread_html, monkeypatch):
+    p = tmp_path / "session.json"
+    save_session(str(p), email="x@y.de", cookies=[{
+        "name": "PHPSESSID", "value": "abc", "domain": ".wg-gesucht.de", "path": "/"
+    }])
+    monkeypatch.setattr(auth, "session_path", lambda: str(p))
+    routes = {
+        "https://www.wg-gesucht.de/nachrichten.html": (200, nachrichten_html),
+        "https://www.wg-gesucht.de/nachricht.html?nachrichten-id=9123456&list=1":
+            (200, thread_html),
+    }
+    http = FakeHttp(routes)
+    res = messages.read_thread(http, "9123456")
+    assert res["thread"]["thread_id"] == "9123456"
+    assert res["thread"]["subject"] == "WG-Zimmer in Berlin-Friedrichshagen"
+    msgs = res["thread"]["nachrichten"]
+    assert len(msgs) == 2
+    # Eigene Nachricht (my_message)
+    assert msgs[0]["von"] == "self"
+    assert msgs[0]["text"].startswith("Hi Lisa")
+    assert msgs[0]["von_user_id"] == "99999999"
+    # Gegenüber
+    assert msgs[1]["von"] == "other"
+    assert msgs[1]["text"].startswith("Ja, komm")
+    assert msgs[1]["von_user_id"] == "12345678"
+    # Gegenüber-User aus Header-Image (Fallback / direkter Pfad)
+    assert res["thread"]["gegenueber_user_id"] == "12345678"
+    assert res["thread"]["eigene_user_id"] == "99999999"
+    assert res["thread"]["anzeige_geloescht"] is False
+
+
+def test_messages_read_thread_no_session(tmp_path, monkeypatch):
+    monkeypatch.setattr(auth, "session_path", lambda: str(tmp_path / "absent.json"))
+    http = FakeHttp({})
+    with pytest.raises(AuthError):
+        messages.read_thread(http, "9123456")
+
+
+def test_messages_read_thread_invalid_id(tmp_path, monkeypatch):
+    p = tmp_path / "s.json"
+    save_session(str(p), email="x@y.de", cookies=[{
+        "name": "PHPSESSID", "value": "abc", "domain": ".wg-gesucht.de", "path": "/"
+    }])
+    monkeypatch.setattr(auth, "session_path", lambda: str(p))
+    http = FakeHttp({})
+    with pytest.raises(ValueError):
+        messages.read_thread(http, "not a number")
+    with pytest.raises(ValueError):
+        messages.read_thread(http, "")
 
 
 def test_messages_list_no_session(tmp_path, monkeypatch):

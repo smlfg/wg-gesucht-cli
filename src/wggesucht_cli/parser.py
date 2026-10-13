@@ -433,62 +433,241 @@ def looks_logged_in(html: str) -> bool:
     return False
 
 
+# Regex-Helpers für die ECHTE wg-gesucht-DOM-Struktur (Stand 2026-10-13,
+# reproduziert mit eingeloggtem Browser-Use gegen wg-gesucht.de):
+#
+#   <div id="conversation_<ID>" class="panel-body [conversation_unread]"
+#        data-conversation_id="<ID>"
+#        data-conversations_user_id="<ID>">
+#       <a class="link-conversation-list"
+#          href="/nachricht.html?nachrichten-id=<ID>&list=1#last_message_id_<M>">
+#         ...
+#       </a>
+#       <span class="list_item_public_name" data-conversation_id="<ID>">Name</span>
+#       <div class="conversations_list_ad_title">Anzeigentitel (ggf. gelöscht)</div>
+#       <div class="latest_message">Vorschau der letzten Nachricht</div>
+#       <div class="latest_message_timestamp_list">14.09.2026</div>
+#   </div>
+#
+# Eine Konversation ist in genau EINEM <div id="conversation_<ID>"> verpackt;
+# andere Knoten mit data-conversation_id sind Tag-/Bulk-Action-Container und
+# sollen NICHT als Thread gezählt werden (siehe lessons/2026-10-13-messages-
+# parser-doppel-count.md).
+_CONVERSATION_DIV_SEL = (
+    'div.panel-body[id^="conversation_"][data-conversation_id]'
+)
+
+
+def _parse_thread_date(s: str) -> Optional[str]:
+    """Akzeptiert sowohl '14.09.2026' als auch 'vor 3 Tagen' / 'gestern' und
+    liefert im ersten Fall ISO-Datum, sonst None. 'vor N Tagen'-Strings
+    werden zu ``None`` (Heuristik, kein volles Datum)."""
+    if not s:
+        return None
+    s = s.strip()
+    m = re.search(r"(\d{2}\.\d{2}\.\d{4})", s)
+    if m:
+        return _parse_date(m.group(1))
+    # "heute", "gestern", "vor N Tagen/Stunden/Minuten" → keine ISO-Datum
+    return None
+
+
 def parse_messages_list(html: str) -> list[dict]:
-    """Parst den Posteingang. Sehr robust, da Layout sich oft ändert."""
+    """Parst den Posteingang anhand der echten DOM-Struktur (2026-10-13).
+
+    Quelle ist ``https://www.wg-gesucht.de/nachrichten.html`` (von JS
+    gerendert; ohne JS ist die Liste leer). Erkannt wird jeder Container
+    ``<div id="conversation_<ID>" data-conversation_id="<ID>">``.
+
+    Rückgabe: Liste von Dicts mit
+      ``thread_id`` (str), ``subject``, ``absender``, ``datum`` (ISO),
+      ``gelesen`` (bool), ``vorschau``, ``url``, ``nachrichten_id``.
+    """
+    if not html:
+        return []
     soup = BeautifulSoup(html, "lxml")
     threads: list[dict] = []
-    # Strategie 1: typische Tabellen-Struktur
-    for row in soup.find_all("tr"):
-        a = row.find("a", href=re.compile(r"/nachrichten/.*\d"))
-        if not a:
+    seen: set[str] = set()
+    for panel in soup.select(_CONVERSATION_DIV_SEL):
+        tid = str(panel.get("data-conversation_id") or "")
+        if not tid or not tid.isdigit() or tid in seen:
             continue
-        href = a.get("href", "")
-        # Anzeigen-/Thread-IDs sind typisch am Pfad-Ende: /nachrichten/<ID>.html
-        m = re.search(r"/(\d+)(?:\.html)?(?:/|$|\?|#)", href)
-        if not m:
-            # Fallback: erste Ziffernfolge im Pfad
-            m = re.search(r"/nachrichten/(\d+)", href)
-        thread_id = m.group(1) if m else None
-        if not thread_id:
-            continue
-        cells = [_text(td) for td in row.find_all("td")]
-        subject = a.get_text(strip=True) or (cells[1] if len(cells) > 1 else None)
-        absender = cells[0] if cells else None
-        datum_txt = cells[2] if len(cells) > 2 else None
-        # Versuche Datum zu parsen
-        datum = None
-        if datum_txt:
-            dm = re.search(r"(\d{2}\.\d{2}\.\d{4})(?:[ T](\d{2}:\d{2}))?", datum_txt)
-            if dm:
-                datum = _parse_date(dm.group(1))
-                if dm.group(2):
-                    datum = datum + "T" + dm.group(2) + ":00+02:00"
-        vorschau = cells[3] if len(cells) > 3 else None
-        gelesen = "unread" in (row.get("class") or [])
+        seen.add(tid)
+
+        # Subject / Anzeigentitel
+        ad_title_node = panel.find(class_=re.compile(r"conversations_list_ad_title"))
+        subject = _norm_ws(ad_title_node.get_text(" ")) if ad_title_node else None
+        # "Diese Anzeige wurde gelöscht" ist ein <i>, der Text steht aber auch drin
+        # → wir liefern ihn wie er ist, das ist semantisch korrekt.
+
+        # Absender / Public Name
+        sender_node = panel.find(class_=re.compile(r"list_item_public_name"))
+        absender = _norm_ws(sender_node.get_text(" ")) if sender_node else None
+
+        # Vorschau der letzten Nachricht
+        preview_node = panel.find(class_=re.compile(r"latest_message(?:\s|$)"))
+        vorschau = _norm_ws(preview_node.get_text(" ")) if preview_node else None
+
+        # Datum ("14.09.2026" oder relativ "vor 3 Tagen")
+        datum_node = panel.find(class_=re.compile(r"latest_message_timestamp_list"))
+        datum = _parse_thread_date(_norm_ws(datum_node.get_text(" ")) if datum_node else "")
+
+        # gelesen-Flag
+        klassen = panel.get("class") or []
+        gelesen = "conversation_unread" not in klassen
+
+        # URL zum Detail (singular: /nachricht.html?nachrichten-id=ID)
+        link = panel.find("a", href=re.compile(r"/nachricht\.html"))
+        href_attr = link.get("href") if link else None
+        href = urljoin(BASE, str(href_attr)) if href_attr else None
+
         threads.append({
-            "thread_id": thread_id,
+            "thread_id": tid,
+            "nachrichten_id": tid,
+            "url": href,
             "subject": subject,
             "absender": absender,
             "datum": datum,
             "gelesen": gelesen,
             "vorschau": vorschau,
         })
-    if threads:
-        return threads
-    # Strategie 2: Cards / div-Container
-    for card in soup.find_all("div", class_=re.compile(r"message_thread|nachrichten|message-list")):
-        a = card.find("a", href=True)
-        if not a:
-            continue
-        m = re.search(r"/nachrichten(?:/.*?)?/(\d+)", a["href"])
-        if not m:
-            continue
-        threads.append({
-            "thread_id": m.group(1),
-            "subject": _text(card.find(["h3", "h4", "span", "strong"])) or None,
-            "absender": _text(card.find(class_=re.compile(r"sender|absender|from"))),
-            "datum": None,
-            "gelesen": False,
-            "vorschau": _text(card.find("p")),
-        })
     return threads
+
+
+def parse_thread(html: str, thread_id: str = "") -> dict:
+    """Parst eine Konversations-Detailseite.
+
+    Quelle ist ``https://www.wg-gesucht.de/nachricht.html?nachrichten-id=<ID>``
+    (Singular!). Die echte Struktur (Stand 2026-10-13)::
+
+        <div id="messages_container">
+            <h1 class="sr-only">Unterhaltung mit <Name></h1>
+            <div class="conversation_ad_card">      <!-- Anzeigenkarte -->
+                <span class="conversation_ad_card_title">Titel</span>
+                <b>WG-Größe</b> <b>| m²</b> <b>| €</b>
+                <b>Name</b> Mitglied seit: Monat Jahr
+            </div>
+            <div class="last_message_selector">     <!-- genau eine Message -->
+                <div class="row">
+                    <div class="col-xs-12 col-sm-1">      <!-- Gegenüber -->
+                        <img class="conversation_profile_image" data-user_id="...">
+                    </div>
+                    <div class="col-xs-10 col-sm-11">     <!-- rechtsbündig -->
+                        <div id="last_message_id_<M>"
+                             class="message [my_message]">
+                            <div class="message_content message_text"
+                                 data-user_id="...">Text</div>
+                        </div>
+                        <div class="message_timestamp latest_message_timestamp">
+                            14.09.2026  <-- oder relativ
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- mehrere .last_message_selector-Blöcke (1 pro Nachricht) -->
+        </div>
+
+    Rückgabe-Form::
+
+        {
+          "thread_id": "...",
+          "nachrichten_id": "...",
+          "subject": "<Ad-Titel>",      # None, wenn Anzeige gelöscht
+          "gegenueber_name": "...",
+          "gegenueber_user_id": "...",
+          "anzeige_geloescht": bool,
+          "nachrichten": [
+              {"von_user_id": "...",
+               "von": "self|other",
+               "datum": "2026-09-14" | None,
+               "text": "...",
+               "id": "<last_message_id_...>"},
+              ...
+          ],
+        }
+    """
+    if not html:
+        return {"thread_id": thread_id, "nachrichten_id": thread_id, "nachrichten": []}
+    soup = BeautifulSoup(html, "lxml")
+
+    # Subject: Anzeigentitel. gelöscht → leerer Header (conversation_ad_empty_card)
+    ad_card = soup.find(class_=re.compile(r"conversation_ad_card"))
+    subject: Optional[str] = None
+    ad_id: Optional[str] = None
+    geloescht = False
+    if ad_card is not None and "conversation_ad_empty_card" not in (ad_card.get("class") or []):
+        title_node = ad_card.find(class_=re.compile(r"conversation_ad_card_title"))
+        subject = _norm_ws(title_node.get_text(" ")) if title_node else None
+        link = ad_card.find("a", href=re.compile(r"\.(?P<id>\d+)\.html"))
+        if link:
+            m = re.search(r"\.(\d+)\.html", link.get("href", ""))
+            if m:
+                ad_id = m.group(1)
+    else:
+        geloescht = True
+
+    # Gegenüber-Name: <h1 class="sr-only">Unterhaltung mit <NAME></h1>
+    gegenueber_name: Optional[str] = None
+    h1 = soup.find("h1", class_="sr-only")
+    if h1 and h1.get_text():
+        h1_text = str(h1.get_text(" "))
+        m = re.search(r"Unterhaltung mit\s+(.+)", h1_text, re.I)
+        if m:
+            gegenueber_name = _norm_ws(m.group(1))
+
+    # Eigenen User-ID aus dem ersten .my_message herauslesen; aus dem Header
+    # (conversation_profile_image[data-user_id]) nehmen wir den Gegenüber.
+    my_user_id: Optional[str] = None
+    other_user_id: Optional[str] = None
+
+    msgs: list[dict] = []
+    for sel in soup.find_all(class_="last_message_selector"):
+        msg_node = sel.find(class_=re.compile(r"\bmessage(\s|$)"))
+        if msg_node is None:
+            continue
+        text_node = msg_node.find(class_=re.compile(r"message_text|message_content"))
+        text = _norm_ws(text_node.get_text("\n")) if text_node else None
+        if text_node is not None:
+            uid_raw = text_node.get("data-user_id")
+            uid = str(uid_raw) if uid_raw is not None else None
+        else:
+            uid = None
+        msg_classes = [c for c in (msg_node.get("class") or []) if isinstance(c, str)]
+        is_mine = "my_message" in msg_classes
+        if uid and is_mine and my_user_id is None:
+            my_user_id = uid
+        if uid and not is_mine and other_user_id is None:
+            other_user_id = uid
+        # ID + Zeitstempel
+        ts_node = sel.find(id=re.compile(r"^last_message_id_"))
+        msg_id = str(ts_node.get("id")) if ts_node and ts_node.get("id") else None
+        ts_text = None
+        ts_elt = sel.find(class_=re.compile(r"message_timestamp|latest_message_timestamp"))
+        if ts_elt:
+            ts_text = _norm_ws(ts_elt.get_text(" "))
+        datum = _parse_thread_date(ts_text) if ts_text else None
+        msgs.append({
+            "id": msg_id,
+            "von_user_id": uid,
+            "von": "self" if is_mine else "other",
+            "datum": datum,
+            "text": text,
+        })
+
+    # Fallback: Gegenüber-User aus Header-Image, falls keine "other" Message
+    if other_user_id is None:
+        prof_img = soup.find(class_=re.compile(r"conversation_profile_image"))
+        if prof_img and prof_img.get("data-user_id") is not None:
+            other_user_id = str(prof_img.get("data-user_id"))
+
+    return {
+        "thread_id": thread_id,
+        "nachrichten_id": thread_id,
+        "subject": subject,
+        "anzeige_id": ad_id,
+        "anzeige_geloescht": geloescht,
+        "gegenueber_name": gegenueber_name,
+        "gegenueber_user_id": other_user_id,
+        "eigene_user_id": my_user_id,
+        "nachrichten": msgs,
+    }

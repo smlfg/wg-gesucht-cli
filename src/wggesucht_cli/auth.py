@@ -1,22 +1,25 @@
-"""Login gegen wg-gesucht.de via HTTP-Form-POST.
+"""Login gegen wg-gesucht.de.
 
-Funktioniert mit einer normalen `requests`-Session, weil
-wg-gesucht.de einen klassischen Formular-Login hat (Stand 2026-10-13).
-Der Login-Endpoint ist **nicht** offiziell dokumentiert; die hier
-verwendeten URLs sind aus dem gerenderten HTML abgeleitet und über
-die Login-Seite reproduzierbar.
+Stand 2026-10-13: wg-gesucht.de hat **kein klassisches HTML-Login-Formular
+mehr**. Das Formular ``login_form`` ist nur ein Anzeige-Mockup; der echte
+Login läuft per **JSON-POST** auf ``/ajax/sessions.php?action=login``.
+Antwort enthält ``access_token`` (Bearer, 1h gültig) und ``refresh_token``
+sowie ``user_id`` und ``dev_ref_no``. Diese Tokens werden als Cookies mit
+HttpOnly/Secure-Flag in der Session gespeichert und bei jedem Request als
+Header ``X-Authorization: Bearer <token>`` ausgewertet.
 
-Wichtig: Ein erfolgreicher Login erfordert **Beweis** – das
-bloße Setzen eines Session-Cookies reicht nicht (siehe
-learnings/2026-10-08-login-erfolg-braucht-beweis.md).
+``PHPSESSID`` allein reicht für API-Calls nicht aus (siehe 401 auf
+``POST /api/conversations`` ohne Bearer). Daher muss der Login alle
+OAuth-Tokens korrekt speichern.
 """
 
 from __future__ import annotations
 
 import getpass
+import json
 import os
 from typing import Any, Optional
-from urllib.parse import urljoin
+from urllib.parse import urljoin  # noqa: F401  (legacy reference in module)
 
 from . import parser
 from .http_client import (
@@ -30,11 +33,7 @@ from .http_client import (
 
 
 BASE = "https://www.wg-gesucht.de"
-LOGIN_URL_CANDIDATES = [
-    BASE + "/mein-wg-gesucht.html",
-    BASE + "/mein-wg-gesucht",
-    BASE + "/nachrichten.html",
-]
+LOGIN_API_URL = BASE + "/ajax/sessions.php?action=login"
 
 
 def _is_logged_in_response(r: Response) -> bool:
@@ -63,60 +62,73 @@ def _read_credentials(env: Optional[dict] = None) -> tuple[Optional[str], Option
 
 
 def login(*, http: HttpClient, env: Optional[dict] = None, store_path: Optional[str] = None) -> dict:
+    """Login per JSON-POST gegen /ajax/sessions.php?action=login.
+
+    1) Holt eine frische PHPSESSID von der Startseite.
+    2) POST login_email_username + login_password als JSON.
+    3) Erwartet 200 mit access_token in der Response; speichert alle
+       relevanten Tokens als Cookies.
+    4) Beweis: GET auf /nachrichten.html - muss eingeloggt aussehen.
+    """
     email, password = _read_credentials(env)
     if not email or not password:
         raise AuthError("WG_EMAIL / WG_PASSWORD fehlen", code="missing_credentials")
-    # 1) Login-Seite holen, um Formular-Action + versteckte Felder zu lesen
-    last_err: Optional[Exception] = None
-    for url in LOGIN_URL_CANDIDATES:
+
+    # 1) Vorlogin: PHPSESSID holen. Server leitet meist auf /?modal=sign_in,
+    # wenn noch nichts gesetzt ist - das ist OK, der Server vergibt PHPSESSID.
+    try:
+        warm = http.get(BASE + "/?modal=sign_in")
+    except HTTPError as e:
+        raise AuthError(f"Login-Warmup fehlgeschlagen: {e}", code="auth_failed") from e
+
+    # 2) Echter Login-Versuch: JSON-POST
+    payload = {
+        "login_email_username": email,
+        "login_password": password,
+        "display_language": "de",
+    }
+    try:
+        r = http.post(LOGIN_API_URL, json=payload)
+    except HTTPError as e:
+        raise AuthError(f"Login-POST fehlgeschlagen: {e}", code="auth_failed") from e
+
+    if r.status >= 400:
         try:
-            r = http.get(url)
-        except HTTPError as e:
-            last_err = e
-            continue
-        if r.status >= 400:
-            continue
-        info = parser.parse_login_form(r.text)
-        action = info["action"]
-        fields = dict(info["fields"])
-        fields["login_email"] = email
-        fields["login_password"] = password
-        # WG-Gesucht hat typischerweise "login_remember" / "login_submit"
-        fields.setdefault("login_remember", "1")
-        if not action:
-            post_url = url
-        else:
-            post_url = action if "://" in action else urljoin(r.url, action)
-        try:
-            r2 = http.post(post_url, data=fields)
-        except HTTPError as e:
-            last_err = e
-            continue
-        # 2) Beweis: GET auf /nachrichten.html
-        if _is_logged_in_response(r2):
-            # session beweis auch noch über einen frischen GET auf /nachrichten
-            check = http.get(BASE + "/nachrichten.html")
-            if not _is_logged_in_response(check):
-                continue
-        else:
-            # Manche Setups: nach POST direkt auf nachrichten umgeleitet.
-            check = http.get(BASE + "/nachrichten.html")
-            if not _is_logged_in_response(check):
-                continue
-        # Erfolg: Cookies speichern
-        cookies = _export_cookies(http)
-        path = store_path or session_path()
-        save_session(path, email=email, cookies=cookies)
-        return {
-            "ok": True,
-            "user": email,
-            "session_file": path,
-            "cookie_anzahl": len(cookies),
-        }
-    # Wenn wir hier ankommen, hat nichts geklappt
-    if last_err:
-        raise AuthError(f"Login fehlgeschlagen: {last_err}", code="auth_failed")
-    raise AuthError("Login fehlgeschlagen (kein Beweis-Endpoint erreichbar)", code="auth_failed")
+            err_data = json.loads(r.text)
+            detail = err_data.get("detail") or err_data.get("title") or r.text[:200]
+        except json.JSONDecodeError:
+            detail = r.text[:200]
+        raise AuthError(f"Login abgelehnt (HTTP {r.status}): {detail}", code="auth_failed")
+
+    try:
+        data = json.loads(r.text)
+    except json.JSONDecodeError as e:
+        raise AuthError(f"Login-Antwort kein JSON: {e}", code="auth_failed") from e
+    access_token = data.get("access_token")
+    if not access_token:
+        raise AuthError(
+            f"Login-Antwort ohne access_token: {r.text[:200]}",
+            code="auth_failed",
+        )
+
+    # 3) Beweis: GET /nachrichten.html
+    check = http.get(BASE + "/nachrichten.html")
+    if not _is_logged_in_response(check):
+        raise AuthError(
+            "Login-Beweis fehlgeschlagen: /nachrichten.html sieht nicht eingeloggt aus",
+            code="auth_failed",
+        )
+
+    cookies = _export_cookies(http)
+    path = store_path or session_path()
+    save_session(path, email=email, cookies=cookies, base_url=BASE)
+    return {
+        "ok": True,
+        "user": email,
+        "user_id": data.get("user_id"),
+        "session_file": path,
+        "cookie_anzahl": len(cookies),
+    }
 
 
 def _export_cookies(http) -> list[dict]:
@@ -131,8 +143,6 @@ def _export_cookies(http) -> list[dict]:
         all_c = http._session.cookies  # type: ignore[attr-defined]
     out: list[dict] = []
     for c in all_c:
-        # requests-Cookie: .domain, .name, .value, .path
-        # Test-Cookie: dict
         if isinstance(c, dict):
             domain = (c.get("domain") or "").lower().lstrip(".")
             name = c.get("name")

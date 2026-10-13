@@ -1,8 +1,15 @@
-"""Posteingang lesen / Nachrichten senden."""
+"""Posteingang lesen / Nachrichten senden.
+
+Hinweis zu Pfaden (Stand 2026-10-13, reproduziert mit eingeloggtem
+Browser-Use gegen wg-gesucht.de):
+- Liste: GET https://www.wg-gesucht.de/nachrichten.html  (Mehrzahl!)
+- Thread: GET https://www.wg-gesucht.de/nachricht.html?nachrichten-id=<ID>
+          (Einzahl!) - hier ANZEIGEN steht eine Detail-Karte, sonst steht
+          "Diese Anzeige wurde gelöscht".
+"""
 
 from __future__ import annotations
 
-import re
 from typing import Optional
 from urllib.parse import urljoin
 
@@ -40,37 +47,21 @@ def list_messages(http: HttpClient) -> dict:
 
 
 def read_thread(http: HttpClient, thread_id: str) -> dict:
+    """Liest eine Konversation.
+
+    ``thread_id`` ist die ``nachrichten-id`` aus der ``/nachricht.html``-URL.
+    """
+    if not thread_id or not thread_id.isdigit():
+        raise ValueError(f"ungültige thread_id: {thread_id!r}")
     sess = _ensure_session(http)
-    url = f"{BASE}/nachrichten/{thread_id}.html"
+    url = f"{BASE}/nachricht.html?nachrichten-id={thread_id}&list=1"
     r = http.get(url)
     if r.status >= 400 or not parser.looks_logged_in(r.text):
         raise AuthError("Session abgelaufen oder ungültig", code="session_expired")
-    from bs4 import BeautifulSoup
-    soup = BeautifulSoup(r.text, "lxml")
-    subject_node = soup.find("h1") or soup.find("h2")
-    subject = subject_node.get_text(strip=True) if subject_node else None
-    # Nachrichten
-    msgs: list[dict] = []
-    for msg_div in soup.find_all("div", class_=re.compile(r"message_(row|body|item)|nachricht")):
-        von = None
-        von_node = msg_div.find(class_=re.compile(r"sender|absender|user_name"))
-        if von_node:
-            von = von_node.get_text(strip=True)
-        datum = None
-        datum_node = msg_div.find(class_=re.compile(r"date|datum|time"))
-        if datum_node:
-            datum = datum_node.get_text(strip=True)
-        # body
-        body_node = msg_div.find(class_=re.compile(r"text|body|content")) or msg_div.find("p")
-        text = body_node.get_text("\n", strip=True) if body_node else None
-        msgs.append({"von": von, "datum": datum, "text": text})
+    payload = parser.parse_thread(r.text, thread_id=thread_id)
     return {
         "quelle": url,
-        "thread": {
-            "thread_id": thread_id,
-            "subject": subject,
-            "nachrichten": msgs,
-        },
+        "thread": payload,
     }
 
 

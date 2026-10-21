@@ -218,9 +218,9 @@ Nachrichten-Endpoint-Stub, CLI-Smoke, alle Filter-Clients). Stand
 2026-10-13.
 
 Die Akzeptanztests in `tests/test_acceptance.py` starten das CLI
-als Subprozess mit der `sitecustomize`-Sandbox aus
-`agent-learnings/tests/harness/sitecustomize.py`, so dass der
-CLI-Subprozess nur Loopback erreichen darf.
+als Subprozess mit der `sitecustomize`-Sandbox in
+`tests/harness/sitecustomize.py`, so dass der CLI-Subprozess nur
+Loopback erreichen darf.
 
 ## Bekannte Einschränkungen
 

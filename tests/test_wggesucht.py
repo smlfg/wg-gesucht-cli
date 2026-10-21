@@ -219,8 +219,8 @@ def test_parse_detail_extracts_fields(detail_html):
     ang = parser.parse_detail(detail_html)
     assert ang["titel"]
     assert ang["id"] == "13374505"
-    # kaltmiete 680€ aus dem Live-Detail
-    assert ang["kaltmiete_euro"] == 680
+    # Kaltmiete aus „Miete:“ (480€), nicht Gesamtmiete (680€) — #9
+    assert ang["kaltmiete_euro"] == 480
     # 18m²
     assert ang["groesse_qm"] == 18
     assert ang["stadt"] == "Berlin"

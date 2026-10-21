@@ -91,9 +91,8 @@ CLI nutzt deshalb die reguläre Web-Schnittstelle:
   `tests/fixtures/` und patchen den HTTP-Adapter. Kein Netz.
 - **Akzeptanztests** in `tests/acceptance/` starten das CLI als
   Subprozess und prüfen Exit-Codes, JSON-Shape und Idempotenz.
-  Mit der `sitecustomize`-Sandbox aus
-  `agent-learnings/tests/harness/sitecustomize.py` darf der
-  Subprozess nur Loopback erreichen.
+  Mit der `sitecustomize`-Sandbox in `tests/harness/sitecustomize.py`
+  darf der Subprozess nur Loopback erreichen.
 - **Live-Smoke** ist optional und liegt nicht in CI: `wggesucht
   search --city Berlin --limit 3 --json`.
 
@@ -106,5 +105,5 @@ CLI nutzt deshalb die reguläre Web-Schnittstelle:
 ## Referenzen
 
 - `agent-learnings/rules/AGENTS.md` – allgemeine Regeln
-- `agent-learnings/tests/harness/sitecustomize.py` – Netz-Sandbox
+- `tests/harness/sitecustomize.py` – Netz-Sandbox für Akzeptanztests
 - `smlfg/ilias-cli`, `smlfg/bafoeg-cli` – Stil-Vorbilder

@@ -1,6 +1,6 @@
 {
   "Berlin": {"id": 8, "slug": "Berlin"},
-  "Hamburg": {"id": 17, "slug": "Hamburg"},
+  "Hamburg": {"id": 55, "slug": "Hamburg"},
   "Muenchen": {"id": 90, "slug": "Muenchen"},
   "Koeln": {"id": 73, "slug": "Koeln"},
   "Frankfurt": {"id": 41, "slug": "Frankfurt"},
@@ -22,7 +22,7 @@
   "Freiburg": {"id": 42, "slug": "Freiburg"},
   "Goettingen": {"id": 49, "slug": "Goettingen"},
   "Giessen": {"id": 47, "slug": "Giessen"},
-  "Heidelberg": {"id": 55, "slug": "Heidelberg"},
+  "Heidelberg": {"id": 59, "slug": "Heidelberg"},
   "Karlsruhe": {"id": 66, "slug": "Karlsruhe"},
   "Kassel": {"id": 67, "slug": "Kassel"},
   "Kiel": {"id": 69, "slug": "Kiel"},

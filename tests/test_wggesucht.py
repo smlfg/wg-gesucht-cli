@@ -202,6 +202,19 @@ def test_parse_search_verfuegbar_bis_from_middle_row_only(search_html):
     assert bogus_bis_eq_ab == []
 
 
+def test_parse_search_mitbewohner_gender_from_noprint_title(search_html):
+    """Geschlechter-Zähler stehen im title-Attribut (0w,0m,1d), nicht im Text (#8)."""
+    offers = parser.parse_search(search_html, limit=100)
+    by_id = {o["id"]: o for o in offers}
+    assert by_id["13374468"]["mitbewohner_anzahl"] == 3
+    assert by_id["13374468"]["mitbewohner_weiblich"] == 2
+    assert by_id["13374468"]["mitbewohner_maennlich"] == 0
+    assert by_id["13374468"]["mitbewohner_divers"] == 0
+    assert by_id["12329701"]["mitbewohner_weiblich"] == 1
+    assert by_id["12329701"]["mitbewohner_maennlich"] == 1
+    assert by_id["12329701"]["mitbewohner_divers"] == 0
+
+
 def test_parse_detail_extracts_fields(detail_html):
     ang = parser.parse_detail(detail_html)
     assert ang["titel"]

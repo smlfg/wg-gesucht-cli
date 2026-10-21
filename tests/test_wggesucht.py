@@ -491,6 +491,16 @@ def test_cli_send_without_confirm_exits_5():
     assert "confirm_required" in r.stderr
 
 
+def test_cli_messages_read_invalid_thread_id():
+    for thread_id in ("abc123", ""):
+        r = _run_cli("messages", "read", thread_id, "--json")
+        assert r.returncode == 1
+        assert "Traceback" not in r.stderr
+        payload = json.loads(r.stderr.strip())
+        assert payload["error"]
+        assert "thread_id" in payload["error"]
+
+
 def test_cli_logout_idempotent(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     r = _run_cli("logout", "--json")

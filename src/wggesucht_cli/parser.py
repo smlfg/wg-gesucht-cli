@@ -233,38 +233,53 @@ def parse_search(html: str, *, limit: int = 20, room_type: str = "wg") -> list[d
         furnished_flag = None
         smoking_flag = None
         for tag in card.find_all(["span", "div"], class_=re.compile(r"noprint|row|vis-title|key_fact")):
-            txt = _text(tag)
-            if not txt:
-                continue
-            m = re.search(r"(\d+)\s*er\s*WG", txt)
-            if m and flatmates_total is None:
-                try:
-                    flatmates_total = int(m.group(1))
-                except ValueError:
-                    pass
-            mm = re.search(r"(\d+)\s*M[äa]nn(?:er)?", txt)
-            if mm and flatmates_male is None:
-                flatmates_male = int(mm.group(1))
-            mf = re.search(r"(\d+)\s*Frau(?:en)?", txt)
-            if mf and flatmates_female is None:
-                flatmates_female = int(mf.group(1))
-            md = re.search(r"(\d+)\s*Divers", txt, re.I)
-            if md and flatmates_diverse is None:
-                flatmates_diverse = int(md.group(1))
-            age_m = re.search(r"(\d{2})\s*(?:Jahre|J\.)\b", txt)
-            if age_m and flatmate_age_text is None:
-                flatmate_age_text = age_m.group(1)
-            if "möbliert" in txt.lower() and furnished_flag is None:
-                furnished_flag = "ja" if "möbliert" in txt.lower() and "nicht" not in txt.lower() else "nein"
-            if "rauchen" in txt.lower() and smoking_flag is None:
-                if "nicht" in txt.lower():
-                    smoking_flag = "nicht_erwuenscht"
-                elif "eigenen" in txt.lower() or "eigenes" in txt.lower():
-                    smoking_flag = "eigenes_zimmer"
-                elif "balkon" in txt.lower():
-                    smoking_flag = "balkon"
-                else:
-                    smoking_flag = "erlaubt"
+            chunks: list[str] = []
+            body = _text(tag)
+            if body:
+                chunks.append(body)
+            title_attr = tag.get("title")
+            if title_attr:
+                chunks.append(_norm_ws(title_attr))
+            for txt in chunks:
+                if not txt:
+                    continue
+                m = re.search(r"(\d+)\s*er\s*WG", txt)
+                if m and flatmates_total is None:
+                    try:
+                        flatmates_total = int(m.group(1))
+                    except ValueError:
+                        pass
+                mg = re.search(r"\((\d+)w,\s*(\d+)m,\s*(\d+)d", txt, re.I)
+                if mg:
+                    if flatmates_female is None:
+                        flatmates_female = int(mg.group(1))
+                    if flatmates_male is None:
+                        flatmates_male = int(mg.group(2))
+                    if flatmates_diverse is None:
+                        flatmates_diverse = int(mg.group(3))
+                mm = re.search(r"(\d+)\s*M[äa]nn(?:er)?", txt)
+                if mm and flatmates_male is None:
+                    flatmates_male = int(mm.group(1))
+                mf = re.search(r"(\d+)\s*Frau(?:en)?", txt)
+                if mf and flatmates_female is None:
+                    flatmates_female = int(mf.group(1))
+                md = re.search(r"(\d+)\s*Divers", txt, re.I)
+                if md and flatmates_diverse is None:
+                    flatmates_diverse = int(md.group(1))
+                age_m = re.search(r"(\d{2})\s*(?:Jahre|J\.)\b", txt)
+                if age_m and flatmate_age_text is None:
+                    flatmate_age_text = age_m.group(1)
+                if "möbliert" in txt.lower() and furnished_flag is None:
+                    furnished_flag = "ja" if "möbliert" in txt.lower() and "nicht" not in txt.lower() else "nein"
+                if "rauchen" in txt.lower() and smoking_flag is None:
+                    if "nicht" in txt.lower():
+                        smoking_flag = "nicht_erwuenscht"
+                    elif "eigenen" in txt.lower() or "eigenes" in txt.lower():
+                        smoking_flag = "eigenes_zimmer"
+                    elif "balkon" in txt.lower():
+                        smoking_flag = "balkon"
+                    else:
+                        smoking_flag = "erlaubt"
         # Fallback: "Xer WG" aus dem Ort-Text (z. B. "3er WG | …")
         if flatmates_total is None and ort_text:
             m = re.search(r"(\d+)\s*er\s*WG", ort_text)

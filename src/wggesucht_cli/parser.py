@@ -126,6 +126,31 @@ def _slug_from_url(url: str) -> tuple[Optional[str], Optional[str], Optional[str
     return stadt, stadtteil, slug
 
 
+def _location_from_address(
+    address: str,
+    slug_stadt: Optional[str],
+    slug_stadtteil: Optional[str],
+) -> tuple[Optional[str], Optional[str]]:
+    """Anzeigenamen für Stadt/Stadtteil aus der Adresszeile (PLZ Ort …)."""
+    address = _norm_ws(address)
+    if not address:
+        return slug_stadt, slug_stadtteil
+    m = re.search(r"\b(\d{5})\s+(.+)$", address)
+    if not m:
+        return slug_stadt, slug_stadtteil
+    tokens = m.group(2).split()
+    if not tokens:
+        return slug_stadt, slug_stadtteil
+    if not slug_stadtteil:
+        return " ".join(tokens), None
+    district_words = len(slug_stadtteil.split("-"))
+    if len(tokens) <= district_words:
+        return slug_stadt, slug_stadtteil
+    stadtteil = " ".join(tokens[-district_words:])
+    stadt = " ".join(tokens[:-district_words])
+    return stadt or slug_stadt, stadtteil
+
+
 def parse_search(html: str, *, limit: int = 20, room_type: str = "wg") -> list[dict]:
     """Parst die Liste der Anzeigen."""
     soup = BeautifulSoup(html, "lxml")
@@ -302,6 +327,7 @@ def parse_detail(html: str) -> dict:
             nxt = parent.find_next("span", class_=re.compile(r"section_panel_detail"))
             if nxt:
                 strasse = _text(nxt)
+                stadt, stadtteil = _location_from_address(strasse, stadt, stadtteil)
     # Felder werden zeilenweise geparst. Strategie: suche nach Labels und
     # ermittle den Wert im gleichen key_fact-Block oder in der gleichen row.
     avail_from = None

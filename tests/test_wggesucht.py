@@ -210,6 +210,43 @@ def test_parse_detail_extracts_fields(detail_html):
     assert ang["kaltmiete_euro"] == 680
     # 18m²
     assert ang["groesse_qm"] == 18
+    assert ang["stadt"] == "Berlin"
+    assert ang["stadtteil"] == "Friedrichshagen"
+
+
+def _minimal_detail_html(canonical: str, ad_id: str, address_html: str) -> str:
+    return f"""<html><head>
+<link rel="canonical" href="{canonical}"/>
+</head><body data-ad_id="{ad_id}">
+<h1 class="detailed-view-title">Test</h1>
+<div class="row"><div class="col-xs-12"><div class="panel section_panel"><div class="row">
+<div class="col-xs-12 col-sm-6">
+<h2 class="section_panel_title mb10 m0">Adresse</h2>
+<div class="row"><div class="col-xs-12">
+<span class="section_panel_detail">{address_html}</span>
+</div></div></div></div></div></div>
+</body></html>"""
+
+
+def test_parse_detail_stadt_stadtteil_from_address_not_url_slug():
+    """#7: Anzeigenamen wie search, nicht ASCII-Slug aus der URL."""
+    koeln = _minimal_detail_html(
+        "https://www.wg-gesucht.de/wg-zimmer-in-Koeln-Suedstadt.7690568.html",
+        "7690568",
+        "Zwirnerstraße<br/>50678 Köln Südstadt",
+    )
+    ang = parser.parse_detail(koeln)
+    assert ang["stadt"] == "Köln"
+    assert ang["stadtteil"] == "Südstadt"
+
+    berlin = _minimal_detail_html(
+        "https://www.wg-gesucht.de/wg-zimmer-in-Berlin-Prenzlauer-Berg.14222232.html",
+        "14222232",
+        "Beispielweg<br/>10405 Berlin Prenzlauer Berg",
+    )
+    ang = parser.parse_detail(berlin)
+    assert ang["stadt"] == "Berlin"
+    assert ang["stadtteil"] == "Prenzlauer Berg"
 
 
 def test_parse_detail_extracts_beschreibung_text(detail_html):

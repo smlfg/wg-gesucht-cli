@@ -200,6 +200,19 @@ def test_date_helper_invalid():
         _parse_date_arg("")
 
 
+def test_date_helper_invalid_calendar():
+    import argparse
+    for bad in ("2026-13-99", "2026-02-31"):
+        with pytest.raises(argparse.ArgumentTypeError):
+            _parse_date_arg(bad)
+
+
+def test_date_ddmmyyyy_rejects_invalid_calendar():
+    for bad in ("2026-13-99", "2026-02-31"):
+        with pytest.raises(ValueError, match="Kalenderdatum"):
+            cities._date_ddmmyyyy(bad)
+
+
 # ---------- Parser ----------
 
 def test_parse_synthetic_offers_basic(synthetic_offers):
@@ -322,3 +335,11 @@ def test_cli_search_rejects_unknown_date_format():
     r = _run_cli("search", "--city", "Heilbronn", "--move-in-from", "2026/11/01", "--json")
     assert r.returncode != 0
     assert "Datumsformat" in r.stderr or "Date" in r.stderr
+
+
+def test_cli_search_rejects_invalid_calendar_date():
+    r = _run_cli(
+        "search", "--city", "Heilbronn", "--move-in-from", "2026-02-31", "--json",
+    )
+    assert r.returncode == 1
+    assert "Kalenderdatum" in r.stderr

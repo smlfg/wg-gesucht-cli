@@ -324,15 +324,26 @@ def parse_detail(html: str) -> dict:
             rent = _eur_to_int(text)
         elif var_name == "size":
             size = _qm_to_int(text)
-    # Beschreibung: längster description_text-Block
+    # Beschreibung: wg-gesucht nutzt id="ad_description_text" (nicht Klassenname)
     beschreibung = None
-    for node in soup.find_all("div", class_=re.compile(r"description_text|detail_description")):
-        t = _norm_ws(node.get_text("\n"))
+    ad_desc = soup.find("div", id="ad_description_text")
+    if ad_desc:
+        t = _norm_ws(ad_desc.get_text("\n"))
         if len(t) > 200:
             beschreibung = t
-            break
     if not beschreibung:
-        candidates = soup.find_all("div", class_=re.compile(r"section_panel_detail"))
+        for node in soup.find_all("div", class_=re.compile(r"description_text|detail_description")):
+            t = _norm_ws(node.get_text("\n"))
+            if len(t) > 200:
+                beschreibung = t
+                break
+    if not beschreibung:
+        for node in soup.find_all("div", class_=re.compile(r"section_freetext")):
+            t = _norm_ws(node.get_text("\n"))
+            if len(t) > 200 and (not beschreibung or len(t) > len(beschreibung)):
+                beschreibung = t
+    if not beschreibung:
+        candidates = soup.find_all(class_=re.compile(r"section_panel_detail"))
         if candidates:
             beschreibung = _norm_ws(max((c.get_text("\n") for c in candidates), key=len))
     return {

@@ -1,6 +1,6 @@
 """Akzeptanztests – führen die CLI als Subprozess aus.
 
-Lädt die agent-learnings-Sandbox via PYTHONPATH, so dass der
+Lädt die Sandbox in tests/harness via PYTHONPATH, so dass der
 CLI-Subprozess nur Loopback-Verbindungen öffnen darf. Damit
 kann eine Implementierung, die die Test-Konfiguration ignoriert,
 niemals echte Server erreichen.

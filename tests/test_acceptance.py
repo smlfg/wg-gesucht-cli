@@ -17,7 +17,12 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
-HARNESS = Path("/home/box/cli-daily/agent-learnings/tests/harness")
+HARNESS = ROOT / "tests" / "harness"
+
+
+def test_acceptance_harness_sitecustomize_in_repo():
+    """Die Netz-Sandbox muss im Repo liegen (kein Maschinenpfad)."""
+    assert (HARNESS / "sitecustomize.py").is_file()
 
 
 def _run_cli(*args, env_extra=None, monkeypatch_env=None):

@@ -479,6 +479,20 @@ def test_cli_help():
     assert "messages" in r.stdout
 
 
+def test_cli_validation_errors_exit_1():
+    """argparse usage errors must be exit 1 (Usage), not 2 (Auth)."""
+    cases = [
+        ["search"],
+        ["frobnicate"],
+        ["search", "--city", "Berlin", "--limit", "abc"],
+        ["search", "--city", "Berlin", "--rooms", "bad"],
+        ["show"],
+    ]
+    for args in cases:
+        r = _run_cli(*args)
+        assert r.returncode == 1, f"{args!r} → {r.returncode}"
+
+
 def test_cli_search_unknown_city():
     r = _run_cli("search", "--city", "Atlantis", "--json")
     assert r.returncode == 1

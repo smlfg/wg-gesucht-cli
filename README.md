@@ -170,7 +170,8 @@ wggesucht messages send --to 4668942 --text "…"
 
 - `--json` schreibt **genau ein** JSON-Objekt auf stdout.
   Prompts/Status gehen auf stderr.
-- `id`/`url`/`stadt`/`stadtteil`/`strasse`/`kaltmiete_euro`/
+- `id`/`url`/`stadt`/`stadtteil`/`strasse`/`gesamtmiete_euro` (Suche,
+  Kartenpreis) bzw. `kaltmiete_euro` (`show`, Feld „Miete:“)/
   `groesse_qm`/`verfuegbar_ab`/`verfuegbar_bis`/`typ`/
   `beschreibung_text` in `snake_case`. Bei Listen-Treffern
   zusätzlich pro Angebot: `mitbewohner_anzahl`,

@@ -280,6 +280,8 @@ def cmd_messages_read(args: argparse.Namespace) -> int:
     http = HttpClient()
     try:
         res = messages.read_thread(http, args.thread_id)
+    except ValueError as e:
+        _err(str(e), code=1)
     except AuthError as e:
         _err(str(e), code=2, kind=e.code, hint="wggesucht login")
     except HTTPError as e:

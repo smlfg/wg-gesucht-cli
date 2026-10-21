@@ -374,8 +374,17 @@ def _add_search_filters(s: argparse.ArgumentParser) -> None:
                    help=argparse.SUPPRESS)
 
 
+class _UsageParser(argparse.ArgumentParser):
+    """Map argparse's default usage-error exit (2) to documented exit 1."""
+
+    def exit(self, status: int = 0, message: Optional[str] = None) -> None:
+        if status == 2:
+            status = 1
+        super().exit(status, message)
+
+
 def _build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(
+    p = _UsageParser(
         prog="wggesucht",
         description="wggesucht – Agent-CLI für wg-gesucht.de (Suche, Login, Nachrichten).",
     )

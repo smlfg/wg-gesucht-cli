@@ -133,6 +133,23 @@ def test_cities_resolve_unknown():
     assert cities.resolve_city("Atlantis") is None
 
 
+def test_cities_ids_unique_and_hamburg_bremen():
+    data = cities._load()
+    ids = [entry["id"] for entry in data.values()]
+    assert len(ids) == len(set(ids)), "duplicate city_id in cities.json"
+    hamburg = cities.resolve_city("Hamburg")
+    bremen = cities.resolve_city("Bremen")
+    assert hamburg["id"] == 55
+    assert bremen["id"] == 17
+    assert hamburg["id"] != bremen["id"]
+    assert cities.build_search_url(hamburg) == (
+        "https://www.wg-gesucht.de/wg-zimmer-in-Hamburg.55.0.1.0.html"
+    )
+    assert cities.build_search_url(bremen) == (
+        "https://www.wg-gesucht.de/wg-zimmer-in-Bremen.17.0.1.0.html"
+    )
+
+
 def test_build_search_url_wg():
     c = cities.resolve_city("Berlin")
     url = cities.build_search_url(c, rooms="wg", max_rent=600, min_size=15)

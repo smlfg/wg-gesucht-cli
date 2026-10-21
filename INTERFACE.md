@@ -41,7 +41,8 @@ wggesucht search --city CITY [--max-rent N] [--min-size N]
   `Frankfurt`. Umsetzung intern: city_id-Lookup über die
   Startseite oder eine kleine eingebaute Mapping-Tabelle
   (siehe `cities.py`).
-- `--max-rent` (optional): maximale Kaltmiete in €.
+- `--max-rent` (optional): maximale Gesamtmiete in € (entspricht
+  WG-Gesucht-Filter `rMax` / Kartenpreis).
 - `--min-size` (optional): Mindest-Zimmergröße in m².
 - `--rooms` (optional): `wg` (WG-Zimmer), `1zimmer` (1-Zimmer-Wohnung),
   `wohnung` (2/3/4-Zimmer), `haus` (Haus). Wirkt über
@@ -66,7 +67,7 @@ wggesucht search --city CITY [--max-rent N] [--min-size N]
       "stadt": "Berlin",
       "stadtteil": "Friedrichshagen",
       "strasse": "Ahornallee",
-      "kaltmiete_euro": 680,
+      "gesamtmiete_euro": 680,
       "groesse_qm": 18,
       "verfuegbar_ab": "2026-10-15",
       "verfuegbar_bis": "2027-04-15",
@@ -102,7 +103,7 @@ wggesucht show OFFER_ID_OR_URL [--json]
     "stadt": "Berlin",
     "stadtteil": "Friedrichshagen",
     "strasse": "Ahornallee",
-    "kaltmiete_euro": 680,
+    "kaltmiete_euro": 480,
     "groesse_qm": 18,
     "verfuegbar_ab": "2026-10-15",
     "verfuegbar_bis": "2027-04-15",

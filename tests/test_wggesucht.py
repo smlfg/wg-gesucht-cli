@@ -187,6 +187,15 @@ def test_parse_detail_extracts_fields(detail_html):
     assert ang["groesse_qm"] == 18
 
 
+def test_parse_detail_extracts_beschreibung_text(detail_html):
+    ang = parser.parse_detail(detail_html)
+    text = ang["beschreibung_text"]
+    assert text
+    assert len(text) > 200
+    assert "Friedrichshagen" in text
+    assert "The Highlights" in text
+
+
 def test_parse_login_form(login_html):
     info = parser.parse_login_form(login_html)
     assert info["action"] == "/mein-wg-gesucht.html"

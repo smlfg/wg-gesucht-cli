@@ -53,13 +53,23 @@ def _parse_date_arg(value: str) -> str:
     s = (value or "").strip()
     if not s:
         raise argparse.ArgumentTypeError("leeres Datum")
+    yyyy = mm = dd = None
     if len(s) >= 10 and s[4] == "-" and s[7] == "-":
-        return s[0:10]
-    if len(s) >= 10 and s[2] == "." and s[5] == ".":
+        yyyy, mm, dd = s[0:4], s[5:7], s[8:10]
+    elif len(s) >= 10 and s[2] == "." and s[5] == ".":
         dd, mm, yyyy = s[0:2], s[3:5], s[6:10]
-        if dd.isdigit() and mm.isdigit() and yyyy.isdigit():
-            return f"{yyyy}-{mm}-{dd}"
-    raise argparse.ArgumentTypeError(f"unerwartetes Datumsformat: {value!r} (YYYY-MM-DD oder DD.MM.YYYY)")
+        if not (dd.isdigit() and mm.isdigit() and yyyy.isdigit()):
+            raise argparse.ArgumentTypeError(
+                f"unerwartetes Datumsformat: {value!r} (YYYY-MM-DD oder DD.MM.YYYY)"
+            )
+    else:
+        raise argparse.ArgumentTypeError(
+            f"unerwartetes Datumsformat: {value!r} (YYYY-MM-DD oder DD.MM.YYYY)"
+        )
+    try:
+        return cities._calendar_iso(yyyy, mm, dd)
+    except ValueError as e:
+        raise argparse.ArgumentTypeError(str(e)) from e
 
 
 def _parse_int_list(value: str) -> list[int]:

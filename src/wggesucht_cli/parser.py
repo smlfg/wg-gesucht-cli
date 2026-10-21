@@ -371,7 +371,8 @@ def parse_detail(html: str) -> dict:
     for label_pat, var_name in [
         (re.compile(r"frei\s+ab", re.I), "avail_from"),
         (re.compile(r"frei\s+bis", re.I), "avail_to"),
-        (re.compile(r"Gesamtmiete", re.I), "rent"),
+        # Kosten-Block „Miete:“ = Kaltmiete (nicht key_fact „Gesamtmiete“) — #9
+        (re.compile(r"Miete", re.I), "rent"),
         (re.compile(r"Zimmergröße", re.I), "size"),
     ]:
         val = _find_value(label_pat)

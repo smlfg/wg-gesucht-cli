@@ -10,6 +10,7 @@ hat, landen in der Query.
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from pathlib import Path
 from typing import Iterable, Optional
 from urllib.parse import quote
@@ -62,6 +63,16 @@ def _join_list(values: Iterable[int | str]) -> str:
     return ",".join(str(v) for v in values if v not in (None, ""))
 
 
+def _calendar_iso(yyyy: str, mm: str, dd: str) -> str:
+    """Liefert ISO YYYY-MM-DD nach Kalenderprüfung."""
+    iso = f"{yyyy}-{mm}-{dd}"
+    try:
+        datetime.strptime(iso, "%Y-%m-%d")
+    except ValueError:
+        raise ValueError(f"ungültiges Kalenderdatum: {iso}") from None
+    return iso
+
+
 def _date_ddmmyyyy(value: str) -> str:
     """Akzeptiert ISO (YYYY-MM-DD) oder deutsch (DD.MM.YYYY) und liefert DD.MM.YYYY."""
     s = (value or "").strip()
@@ -76,6 +87,7 @@ def _date_ddmmyyyy(value: str) -> str:
         raise ValueError(f"unerwartetes Datumsformat: {value!r}")
     if not (yyyy.isdigit() and mm.isdigit() and dd.isdigit()):
         raise ValueError(f"Datums-Bestandteile nicht numerisch: {value!r}")
+    _calendar_iso(yyyy, mm, dd)
     return f"{dd}.{mm}.{yyyy}"
 
 

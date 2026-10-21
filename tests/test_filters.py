@@ -209,7 +209,7 @@ def test_parse_synthetic_offers_basic(synthetic_offers):
 
 
 def test_parse_synthetic_rent_size(synthetic_offers):
-    rents = [o["kaltmiete_euro"] for o in synthetic_offers]
+    rents = [o["gesamtmiete_euro"] for o in synthetic_offers]
     sizes = [o["groesse_qm"] for o in synthetic_offers]
     assert rents == [380, 460, 520, 300]
     assert sizes == [14, 18, 22, 11]

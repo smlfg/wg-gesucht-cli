@@ -85,9 +85,9 @@ def _parse_str_list(value: str) -> list[str]:
 def _client_filter(args: argparse.Namespace, offers: list[dict]) -> list[dict]:
     """Filtert bereits geparste Angebote nach clientseitigen Kriterien."""
     if args.max_rent is not None:
-        offers = [o for o in offers if o["kaltmiete_euro"] is None or o["kaltmiete_euro"] <= args.max_rent]
+        offers = [o for o in offers if o.get("gesamtmiete_euro") is None or o["gesamtmiete_euro"] <= args.max_rent]
     if args.min_rent is not None:
-        offers = [o for o in offers if o["kaltmiete_euro"] is None or o["kaltmiete_euro"] >= args.min_rent]
+        offers = [o for o in offers if o.get("gesamtmiete_euro") is None or o["gesamtmiete_euro"] >= args.min_rent]
     if args.min_size is not None:
         offers = [o for o in offers if o["groesse_qm"] is None or o["groesse_qm"] >= args.min_size]
     if args.max_size is not None:
@@ -317,8 +317,8 @@ def cmd_messages_send(args: argparse.Namespace) -> int:
 def _add_search_filters(s: argparse.ArgumentParser) -> None:
     """Alle Such-Filter als zusammengehörige Gruppe."""
     f = s.add_argument_group("Filter")
-    f.add_argument("--max-rent", type=int, default=None, help="max. Kaltmiete in €")
-    f.add_argument("--min-rent", type=int, default=None, help="min. Kaltmiete in €")
+    f.add_argument("--max-rent", type=int, default=None, help="max. Gesamtmiete in € (wie WG-Gesucht rMax)")
+    f.add_argument("--min-rent", type=int, default=None, help="min. Gesamtmiete in € (wie WG-Gesucht rMin)")
     f.add_argument("--min-size", type=int, default=None, help="min. Zimmergröße in m²")
     f.add_argument("--max-size", type=int, default=None, help="max. Zimmergröße in m²")
     f.add_argument("--radius", type=int, default=None, help="Umkreis in Metern (z. B. 1000 = 1 km)")

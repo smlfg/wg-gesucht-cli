@@ -295,7 +295,7 @@ def parse_search(html: str, *, limit: int = 20, room_type: str = "wg") -> list[d
             "stadt": stadt_text,
             "stadtteil": stadtteil_text,
             "strasse": strasse,
-            "kaltmiete_euro": rent,
+            "gesamtmiete_euro": rent,
             "groesse_qm": size,
             "verfuegbar_ab": avail_from,
             "verfuegbar_bis": avail_to,

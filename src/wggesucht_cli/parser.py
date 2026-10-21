@@ -74,6 +74,35 @@ def _qm_to_int(s: str) -> Optional[int]:
         return None
 
 
+_DATE_RANGE_RE = re.compile(
+    r"(\d{2}\.\d{2}\.\d{4})\s*(?:-|–|&ndash;)\s*(\d{2}\.\d{2}\.\d{4})"
+)
+_CARD_DATE_RE = re.compile(r"(\d{2}\.\d{2}\.\d{4})")
+
+
+def _parse_search_availability(card) -> tuple[Optional[str], Optional[str]]:
+    """Verfügbarkeit aus der Mittelzeile der Karte (Miete | Datum | m²)."""
+    middle = card.find("div", class_=re.compile(r"\bmiddle\b"))
+    if middle:
+        inner = middle.decode_contents()
+        m = _DATE_RANGE_RE.search(inner)
+        if m:
+            return _parse_date(m.group(1)), _parse_date(m.group(2))
+        dates = _CARD_DATE_RE.findall(inner)
+        if dates:
+            return _parse_date(dates[0]), None
+        return None, None
+    for div in card.find_all("div", class_=re.compile(r"\brow\b"), recursive=False):
+        inner_html = div.decode_contents()
+        m = _DATE_RANGE_RE.search(inner_html)
+        if m:
+            return _parse_date(m.group(1)), _parse_date(m.group(2))
+        dates = _CARD_DATE_RE.findall(inner_html)
+        if len(dates) == 1 and "ab" in inner_html.lower():
+            return _parse_date(dates[0]), None
+    return None, None
+
+
 def _slug_from_url(url: str) -> tuple[Optional[str], Optional[str], Optional[str]]:
     """Liefert (stadt, stadtteil, slug) aus einer Anzeigen-URL.
 
@@ -159,13 +188,7 @@ def parse_search(html: str, *, limit: int = 20, room_type: str = "wg") -> list[d
                 m = re.search(r"(\d[\d.,]*)\s*(?:m&sup2;|m²)", inner_html)
                 if m:
                     size = _qm_to_int(m.group(1))
-            dates = re.findall(r"(\d{2}\.\d{2}\.\d{4})", inner_html)
-            if len(dates) >= 2 and ("-" in inner_html or "–" in inner_html or "&ndash;" in inner_html):
-                if avail_from is None:
-                    avail_from = _parse_date(dates[0])
-                avail_to = _parse_date(dates[1])
-            elif len(dates) == 1 and "ab" in inner_html.lower() and avail_from is None:
-                avail_from = _parse_date(dates[0])
+        avail_from, avail_to = _parse_search_availability(card)
         # Fallback für Größe: aus dem "noprint title"-Attribut
         if size is None:
             for span in card.find_all("span", attrs={"title": True}):

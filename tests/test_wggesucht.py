@@ -177,6 +177,31 @@ def test_parse_search_skips_ads_only(search_html):
     assert offers
 
 
+def test_parse_search_verfuegbar_bis_from_middle_row_only(search_html):
+    """verfuegbar_bis darf nicht aus Online-/Print-Duplikaten stammen (#2)."""
+    offers = parser.parse_search(search_html, limit=100)
+    by_id = {o["id"]: o for o in offers}
+    assert by_id["14080537"]["verfuegbar_ab"] == "2026-11-16"
+    assert by_id["14080537"]["verfuegbar_bis"] is None
+    assert by_id["12329701"]["verfuegbar_ab"] == "2027-01-01"
+    assert by_id["12329701"]["verfuegbar_bis"] is None
+    assert by_id["14169169"]["verfuegbar_ab"] == "2026-11-01"
+    assert by_id["14169169"]["verfuegbar_bis"] == "2027-02-28"
+    impossible = [
+        o for o in offers
+        if o["verfuegbar_bis"] and o["verfuegbar_ab"]
+        and o["verfuegbar_bis"] < o["verfuegbar_ab"]
+    ]
+    assert impossible == []
+    bogus_bis_eq_ab = [
+        o["id"] for o in offers
+        if o["verfuegbar_bis"] and o["verfuegbar_ab"]
+        and o["verfuegbar_bis"] == o["verfuegbar_ab"]
+        and o["id"] in {"12329701", "4668942", "14059016"}
+    ]
+    assert bogus_bis_eq_ab == []
+
+
 def test_parse_detail_extracts_fields(detail_html):
     ang = parser.parse_detail(detail_html)
     assert ang["titel"]

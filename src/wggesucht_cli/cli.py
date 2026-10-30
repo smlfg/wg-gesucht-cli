@@ -418,7 +418,13 @@ def _build_parser() -> argparse.ArgumentParser:
     sh.add_argument("--json", action="store_true")
     sh.set_defaults(func=cmd_show)
     # login
-    li = sub.add_parser("login", help="Login mit WG_EMAIL/WG_PASSWORD")
+    li = sub.add_parser(
+        "login",
+        help="Fragt E-Mail und Passwort ab (oder Env WG_EMAIL/WG_PASSWORD für Agenten)",
+        description=(
+            "Fragt E-Mail und Passwort ab (oder Env WG_EMAIL/WG_PASSWORD für Agenten)."
+        ),
+    )
     li.add_argument("--json", action="store_true")
     li.set_defaults(func=cmd_login)
     # logout
@@ -457,7 +463,11 @@ def main(argv: Optional[list[str]] = None) -> int:
         args.min_flatmates_index = max(0, args.min_flatmates - 1) if args.min_flatmates > 1 else 1
     if getattr(args, "max_flatmates", None) is not None and getattr(args, "max_flatmates_index", None) is None:
         args.max_flatmates_index = max(0, args.max_flatmates - 1) if args.max_flatmates > 1 else 1
-    return args.func(args)
+    try:
+        return args.func(args)
+    except KeyboardInterrupt:
+        sys.stderr.write("Abgebrochen.\n")
+        return 130
 
 
 if __name__ == "__main__":

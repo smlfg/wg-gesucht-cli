@@ -18,6 +18,7 @@ from __future__ import annotations
 import getpass
 import json
 import os
+import sys
 from typing import Any, Optional
 from urllib.parse import urljoin  # noqa: F401  (legacy reference in module)
 
@@ -50,14 +51,19 @@ def _read_credentials(env: Optional[dict] = None) -> tuple[Optional[str], Option
         return email, password
     # TTY-Fallback: nur wenn stdin ein TTY ist
     try:
-        if not os.isatty(0):
+        if not sys.stdin.isatty():
             return email, password
-    except OSError:
+    except (AttributeError, OSError):
         return email, password
-    if not email:
-        email = input("WG-Gesucht E-Mail: ").strip()
+    try:
+        if not email:
+            email = input("WG-Gesucht E-Mail: ").strip()
+        if not password:
+            password = getpass.getpass("WG-Gesucht Passwort: ")
+    except (EOFError, KeyboardInterrupt):
+        raise AuthError("Abgebrochen.", code="cancelled") from None
     if not password:
-        password = getpass.getpass("WG-Gesucht Passwort: ")
+        raise AuthError("Passwort darf nicht leer sein.", code="missing_credentials")
     return email or None, password or None
 
 
@@ -72,7 +78,11 @@ def login(*, http: HttpClient, env: Optional[dict] = None, store_path: Optional[
     """
     email, password = _read_credentials(env)
     if not email or not password:
-        raise AuthError("WG_EMAIL / WG_PASSWORD fehlen", code="missing_credentials")
+        raise AuthError(
+            "Login fehlt: `wggesucht login` im Terminal ausführen oder "
+            "WG_EMAIL/WG_PASSWORD setzen",
+            code="missing_credentials",
+        )
 
     # 1) Vorlogin: PHPSESSID holen. Server leitet meist auf /?modal=sign_in,
     # wenn noch nichts gesetzt ist - das ist OK, der Server vergibt PHPSESSID.

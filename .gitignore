@@ -7,3 +7,5 @@ __pycache__/
 .pytest_cache/
 *.html.bak
 .DS_Store
+
+scratch/

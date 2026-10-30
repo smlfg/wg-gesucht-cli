@@ -359,6 +359,55 @@ def test_clear_session_idempotent(tmp_path):
     assert clear_session(str(p)) is False
 
 
+def test_base_url_env_override(tmp_path, login_html, nachrichten_html, monkeypatch):
+    from wggesucht_cli.http_client import base_url
+
+    monkeypatch.delenv("WGG_BASE_URL", raising=False)
+    assert base_url() == "https://www.wg-gesucht.de"
+
+    monkeypatch.setenv("WGG_BASE_URL", "http://127.0.0.1:8123")
+    assert base_url() == "http://127.0.0.1:8123"
+    city = cities.resolve_city("Berlin")
+    assert cities.build_search_url(city, max_rent=500).startswith(
+        "http://127.0.0.1:8123/wg-zimmer-in-Berlin.8.0.1.0.html?rMax=500"
+    )
+    assert parser.detail_url("123").startswith("http://127.0.0.1:8123/")
+
+    p = tmp_path / "session.json"
+    monkeypatch.setattr(auth, "session_path", lambda: str(p))
+    routes = {
+        "http://127.0.0.1:8123/?modal=sign_in": (200, login_html),
+        "http://127.0.0.1:8123/ajax/sessions.php?action=login": (
+            200,
+            json.dumps({
+                "access_token": "tk",
+                "user_id": "42",
+                "refresh_token": "rt",
+                "dev_ref_no": "dev",
+                "csrf_token": "csrf",
+            }),
+        ),
+        "http://127.0.0.1:8123/nachrichten.html": (200, nachrichten_html),
+    }
+    http = FakeHttp(routes)
+    res = auth.login(
+        http=http,
+        env={"WG_EMAIL": "x@y.de", "WG_PASSWORD": "pw"},
+        store_path=str(p),
+    )
+    assert res["ok"] is True
+    assert [url for _, url, _ in http.calls] == [
+        "http://127.0.0.1:8123/?modal=sign_in",
+        "http://127.0.0.1:8123/ajax/sessions.php?action=login",
+        "http://127.0.0.1:8123/nachrichten.html",
+    ]
+
+    http = FakeHttp({"http://127.0.0.1:8123/nachrichten.html": (200, nachrichten_html)})
+    listed = messages.list_messages(http)
+    assert listed["quelle"] == "http://127.0.0.1:8123/nachrichten.html"
+    assert http.calls[0][1] == "http://127.0.0.1:8123/nachrichten.html"
+
+
 # ---------- auth (mit FakeHttp) ----------
 
 def test_login_succeeds_and_saves_session(tmp_path, login_html, nachrichten_html, monkeypatch):

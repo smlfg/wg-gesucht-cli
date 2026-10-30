@@ -20,9 +20,8 @@ from .http_client import (
     AuthError,
     HttpClient,
     HTTPError,
+    base_url,
 )
-
-BASE = "https://www.wg-gesucht.de"
 
 
 def _ensure_session(http: HttpClient) -> dict:
@@ -34,12 +33,13 @@ def _ensure_session(http: HttpClient) -> dict:
 
 def list_messages(http: HttpClient) -> dict:
     sess = _ensure_session(http)
-    r = http.get(BASE + "/nachrichten.html")
+    base = base_url()
+    r = http.get(base + "/nachrichten.html")
     if r.status >= 400 or not parser.looks_logged_in(r.text):
         raise AuthError("Session abgelaufen oder ungültig", code="session_expired")
     threads = parser.parse_messages_list(r.text)
     return {
-        "quelle": BASE + "/nachrichten.html",
+        "quelle": base + "/nachrichten.html",
         "user": sess.get("email"),
         "anzahl": len(threads),
         "threads": threads,
@@ -54,7 +54,7 @@ def read_thread(http: HttpClient, thread_id: str) -> dict:
     if not thread_id or not thread_id.isdigit():
         raise ValueError(f"ungültige thread_id: {thread_id!r}")
     sess = _ensure_session(http)
-    url = f"{BASE}/nachricht.html?nachrichten-id={thread_id}&list=1"
+    url = f"{base_url()}/nachricht.html?nachrichten-id={thread_id}&list=1"
     r = http.get(url)
     if r.status >= 400 or not parser.looks_logged_in(r.text):
         raise AuthError("Session abgelaufen oder ungültig", code="session_expired")
@@ -72,16 +72,17 @@ def send_message(http: HttpClient, *, to: str, text: str, confirm: bool = False)
             code="confirm_required",
         )
     sess = _ensure_session(http)
+    base = base_url()
     # WG-Gesucht hat einen Endpoint /nachrichten/send-message.html
     # mit einem Formular. Ziel = to (User-ID oder Anzeigen-ID).
-    page = http.get(BASE + "/nachrichten/send-message.html?user_id=" + to)
+    page = http.get(base + "/nachrichten/send-message.html?user_id=" + to)
     if page.status >= 400 or not parser.looks_logged_in(page.text):
         raise AuthError("Session abgelaufen oder ungültig", code="session_expired")
     info = parser.parse_login_form(page.text)
     fields = dict(info["fields"])
     fields["message_text"] = text
     fields["user_id"] = to
-    post_url = info["action"] or BASE + "/nachrichten/send-message.html"
+    post_url = info["action"] or base + "/nachrichten/send-message.html"
     if not post_url.startswith("http"):
         post_url = urljoin(page.url, post_url)
     r = http.post(post_url, data=fields)

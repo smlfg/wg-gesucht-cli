@@ -13,11 +13,12 @@ Gate erwartet aber `[j/N]` (siehe `scratch/harness/FORMAT.md`). Dieser
 Unterschied ist ein zentraler False-Positive-Kandidat und steht im
 Bericht `scratch/REPORT-D1.md`.
 
-Ein weiterer Befund: Die CLI hat **keinen Base-URL-Override**. Alle
-URLs sind in `src/wggesucht_cli/{cities,auth,messages,parser}.py` fest
-auf `https://www.wg-gesucht.de` verdrahtet. `ux-meta.base_url_env` ist
-deshalb nur deklariert, nicht implementiert; ein Fake-Server kann von
-der CLI derzeit nicht angesprochen werden.
+Ein weiterer Befund: Die CLI hatte **keinen Base-URL-Override**. Alle
+URLs waren in `src/wggesucht_cli/{cities,auth,messages,parser}.py` fest
+auf `https://www.wg-gesucht.de` verdrahtet. Seit dem Testbarkeits-Fix
+lesen alle Requests `WGG_BASE_URL` (Default
+`https://www.wg-gesucht.de`), sodass der Fake-Server angesprochen werden
+kann.
 
 ## Meta
 
@@ -25,7 +26,7 @@ der CLI derzeit nicht angesprochen werden.
 {
   "tool": "wggesucht",
   "install": "pipx install git+https://github.com/smlfg/wg-gesucht-cli",
-  "base_url_env": "WG_BASE_URL",
+  "base_url_env": "WGG_BASE_URL",
   "required_options_ok": ["--to", "--text"],
   "credential_env": ["WG_EMAIL", "WG_PASSWORD"]
 }

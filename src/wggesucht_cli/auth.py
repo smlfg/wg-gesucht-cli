@@ -28,13 +28,10 @@ from .http_client import (
     HttpClient,
     HTTPError,
     Response,
+    base_url,
     save_session,
     session_path,
 )
-
-
-BASE = "https://www.wg-gesucht.de"
-LOGIN_API_URL = BASE + "/ajax/sessions.php?action=login"
 
 
 def _is_logged_in_response(r: Response) -> bool:
@@ -86,8 +83,9 @@ def login(*, http: HttpClient, env: Optional[dict] = None, store_path: Optional[
 
     # 1) Vorlogin: PHPSESSID holen. Server leitet meist auf /?modal=sign_in,
     # wenn noch nichts gesetzt ist - das ist OK, der Server vergibt PHPSESSID.
+    base = base_url()
     try:
-        warm = http.get(BASE + "/?modal=sign_in")
+        warm = http.get(base + "/?modal=sign_in")
     except HTTPError as e:
         raise AuthError(f"Login-Warmup fehlgeschlagen: {e}", code="auth_failed") from e
 
@@ -98,7 +96,7 @@ def login(*, http: HttpClient, env: Optional[dict] = None, store_path: Optional[
         "display_language": "de",
     }
     try:
-        r = http.post(LOGIN_API_URL, json=payload)
+        r = http.post(base + "/ajax/sessions.php?action=login", json=payload)
     except HTTPError as e:
         raise AuthError(f"Login-POST fehlgeschlagen: {e}", code="auth_failed") from e
 
@@ -122,7 +120,7 @@ def login(*, http: HttpClient, env: Optional[dict] = None, store_path: Optional[
         )
 
     # 3) Beweis: GET /nachrichten.html
-    check = http.get(BASE + "/nachrichten.html")
+    check = http.get(base + "/nachrichten.html")
     if not _is_logged_in_response(check):
         raise AuthError(
             "Login-Beweis fehlgeschlagen: /nachrichten.html sieht nicht eingeloggt aus",
@@ -131,7 +129,7 @@ def login(*, http: HttpClient, env: Optional[dict] = None, store_path: Optional[
 
     cookies = _export_cookies(http)
     path = store_path or session_path()
-    save_session(path, email=email, cookies=cookies, base_url=BASE)
+    save_session(path, email=email, cookies=cookies, base_url=base)
     return {
         "ok": True,
         "user": email,

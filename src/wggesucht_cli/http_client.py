@@ -16,6 +16,12 @@ from urllib.parse import urlparse
 import requests
 
 UA = "wg-gesucht-cli/0.1.0 (+https://github.com/smlfg/wg-gesucht-cli)"
+DEFAULT_BASE_URL = "https://www.wg-gesucht.de"
+
+
+def base_url() -> str:
+    """Basis-URL aller Requests; per WGG_BASE_URL überschreibbar."""
+    return (os.environ.get("WGG_BASE_URL") or DEFAULT_BASE_URL).rstrip("/")
 
 
 class HTTPError(Exception):

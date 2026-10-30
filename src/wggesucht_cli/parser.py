@@ -14,9 +14,7 @@ from urllib.parse import urljoin, urlparse
 
 from bs4 import BeautifulSoup
 
-from .http_client import ParseError, Response
-
-BASE = "https://www.wg-gesucht.de"
+from .http_client import ParseError, Response, base_url
 
 # Akzeptanz für das Datum
 _DATE_PATTERNS = [
@@ -209,7 +207,7 @@ def parse_search(html: str, *, limit: int = 20, room_type: str = "wg") -> list[d
         )
         if not link or not link.get("href"):
             continue
-        href = urljoin(BASE, link["href"])
+        href = urljoin(base_url(), link["href"])
         title_node = card.find("h2", class_=re.compile(r"truncate_title"))
         title = _text(title_node) if title_node else None
         stadt, stadtteil, _slug = _slug_from_url(href)
@@ -498,7 +496,7 @@ def parse_detail(html: str) -> dict:
 
 def detail_url(offer_id: str) -> str:
     """Baut eine URL, die wg-gesucht.de auf die Anzeige umleitet."""
-    return f"{BASE}/{offer_id}.html"
+    return f"{base_url()}/{offer_id}.html"
 
 
 def normalize_offer_input(s: str) -> str:
@@ -664,7 +662,7 @@ def parse_messages_list(html: str) -> list[dict]:
         # URL zum Detail (singular: /nachricht.html?nachrichten-id=ID)
         link = panel.find("a", href=re.compile(r"/nachricht\.html"))
         href_attr = link.get("href") if link else None
-        href = urljoin(BASE, str(href_attr)) if href_attr else None
+        href = urljoin(base_url(), str(href_attr)) if href_attr else None
 
         threads.append({
             "thread_id": tid,

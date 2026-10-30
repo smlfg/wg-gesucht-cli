@@ -15,6 +15,8 @@ from pathlib import Path
 from typing import Iterable, Optional
 from urllib.parse import quote
 
+from .http_client import base_url
+
 # WG-Gesucht verwendet Slugs ohne Umlaute/ß: ä->ae, ö->oe, ü->ue, ß->ss
 _UMLAUT = str.maketrans({"ä": "ae", "ö": "oe", "ü": "ue", "Ä": "Ae", "Ö": "Oe", "Ü": "Ue", "ß": "ss"})
 
@@ -245,6 +247,6 @@ def build_search_url(
         qs.append(("img_only", "1"))
 
     if not qs:
-        return "https://www.wg-gesucht.de" + path
+        return base_url() + path
     encoded = "&".join(f"{quote(k, safe='[]') }={quote(v, safe=',')}" for k, v in qs)
-    return "https://www.wg-gesucht.de" + path + "?" + encoded
+    return base_url() + path + "?" + encoded

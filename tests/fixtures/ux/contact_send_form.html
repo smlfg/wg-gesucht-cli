@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="de">
+<head><meta charset="utf-8"/><title>Nachricht senden - WG-Gesucht.de</title></head>
+<body>
+<nav>
+  <a href="/nachrichten.html">Nachrichten</a>
+  <a href="/mein-wg-gesucht/abmelden.html">Abmelden</a>
+  <span>test@example.org</span>
+</nav>
+
+<h1>Nachricht senden</h1>
+
+<div class="conversation_ad_card p20 mb50 font-xs-12px">
+  <span class="conversation_ad_card_title">Helles Zimmer in Muster-WG</span>
+  <b>3er WG</b> <b>| 18m²</b> <b>| 520€</b>
+</div>
+
+<form id="send_message_form" action="/nachrichten/send-message.html" method="post">
+  <input type="hidden" name="csrf_token" value="dummy-csrf"/>
+  <input type="hidden" name="user_id" value="9000002"/>
+  <label for="message_text">Nachricht</label>
+  <textarea id="message_text" name="message_text" rows="8"></textarea>
+  <button type="submit">Nachricht senden</button>
+</form>
+</body>
+</html>

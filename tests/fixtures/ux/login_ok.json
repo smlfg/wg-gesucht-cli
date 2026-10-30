@@ -1,0 +1,9 @@
+{
+  "access_token": "dummy-access-token",
+  "expires_in": 3600,
+  "token_type": "Bearer",
+  "refresh_token": "dummy-refresh-token",
+  "user_id": "42",
+  "dev_ref_no": "dummy-dev-ref",
+  "csrf_token": "dummy-csrf"
+}

@@ -4,14 +4,15 @@ Diese Datei beschreibt die Bedienung von `wggesucht` so, wie sie heute
 implementiert ist. Sie ist zugleich Eingabe für das UX-Gate
 (`scratch/harness/ux_spec.py`).
 
-Wichtige Abweichung zum Gate-Format: Die schreibende Aktion
-(`wggesucht messages send`) bestätigt **nicht** interaktiv mit `[j/N]`,
-sondern über das explizite Flag `--confirm`. Ohne `--confirm` endet der
-Befehl mit Exit 5, bevor irgendein Request rausgeht. Das ist eine
-bewusste Agenten-Sicherheit und kein fehlender Bestätigungsschritt; das
-Gate erwartet aber `[j/N]` (siehe `scratch/harness/FORMAT.md`). Dieser
-Unterschied ist ein zentraler False-Positive-Kandidat und steht im
-Bericht `scratch/REPORT-D1.md`.
+Wichtige Abweichung zum interaktiven Gate-Format: Die schreibende
+Aktion (`wggesucht messages send`) bestätigt **nicht** interaktiv mit
+`[j/N]`, sondern über das explizite Flag `--confirm`. Ohne `--confirm`
+endet der Befehl mit Exit 5, bevor irgendein Request rausgeht. Das ist
+eine bewusste Agenten-Sicherheit und kein fehlender
+Bestätigungsschritt. Das Gate erkennt das Flag über
+`ux-meta.confirm_flag` als gleichwertige explizite Bestätigung an und
+prüft im N-Lauf, dass der Befehl ohne Flag nichts schreibt (siehe
+`scratch/harness/FORMAT.md`).
 
 Ein weiterer Befund: Die CLI hatte **keinen Base-URL-Override**. Alle
 URLs waren in `src/wggesucht_cli/{cities,auth,messages,parser}.py` fest
@@ -27,6 +28,7 @@ kann.
   "tool": "wggesucht",
   "install": "pipx install git+https://github.com/smlfg/wg-gesucht-cli",
   "base_url_env": "WGG_BASE_URL",
+  "confirm_flag": "--confirm",
   "required_options_ok": ["--to", "--text"],
   "credential_env": ["WG_EMAIL", "WG_PASSWORD"]
 }

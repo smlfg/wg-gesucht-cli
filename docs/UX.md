@@ -28,7 +28,6 @@ kann.
   "tool": "wggesucht",
   "install": "pipx install git+https://github.com/smlfg/wg-gesucht-cli",
   "base_url_env": "WGG_BASE_URL",
-  "confirm_flag": "--confirm",
   "required_options_ok": ["--to", "--text"],
   "credential_env": ["WG_EMAIL", "WG_PASSWORD"]
 }
@@ -74,14 +73,15 @@ $ wggesucht search heilbronn --max-rent 500
 
 ## Sitzung 3: Nachricht an einen Anbieter senden
 
-Die Bestätigung ist hier das Flag `--confirm`, nicht `[j/N]`. Der
-Befehl setzt eine gültige Session aus Sitzung 1 voraus (gleiches
-`XDG_CONFIG_HOME`). Die Ausgabe ist derzeit JSON, auch im Terminal.
+Gewünschte Bedienung für Menschen: Im Terminal fragt der Befehl
+`[j/N]`; `--confirm` bleibt nur für Agenten ohne TTY. Der Befehl setzt
+eine gültige Session aus Sitzung 1 voraus (gleiches `XDG_CONFIG_HOME`).
 
 ```ux-session
-$ wggesucht messages send --to 9000002 --text "Hallo, ist das Zimmer noch frei?" --confirm
-< "ok": true
-< "an": "9000002"
+$ wggesucht messages send --to 9000002 --text "Hallo, ist das Zimmer noch frei?"
+< [j/N]
+> j
+< 9000002
 ! exit 0
 ```
 

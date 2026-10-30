@@ -31,9 +31,19 @@ from .http_client import (
 )
 
 
+_ACTIVE_JSON = False
+
+
 def _stdout_is_tty() -> bool:
     try:
         return bool(sys.stdout.isatty())
+    except (AttributeError, OSError):
+        return False
+
+
+def _stderr_is_tty() -> bool:
+    try:
+        return bool(sys.stderr.isatty())
     except (AttributeError, OSError):
         return False
 
@@ -146,9 +156,23 @@ def _format_messages_list(payload: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _err(msg: str, *, code: int, **extra: Any) -> NoReturn:
-    payload = {"error": msg, **extra}
-    sys.stderr.write(json.dumps(payload, ensure_ascii=False) + "\n")
+def _err(
+    msg: str,
+    *,
+    code: int,
+    as_json: Optional[bool] = None,
+    **extra: Any,
+) -> NoReturn:
+    use_json = _ACTIVE_JSON if as_json is None else as_json
+    if not use_json and _stderr_is_tty():
+        line = f"Fehler: {msg}"
+        hint = extra.get("hint")
+        if hint:
+            line += f" (Hinweis: {hint})"
+        sys.stderr.write(line + "\n")
+    else:
+        payload = {"error": msg, **extra}
+        sys.stderr.write(json.dumps(payload, ensure_ascii=False) + "\n")
     sys.exit(code)
 
 
@@ -594,8 +618,10 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Optional[list[str]] = None) -> int:
+    global _ACTIVE_JSON
     parser_ = _build_parser()
     args = parser_.parse_args(argv)
+    _ACTIVE_JSON = bool(getattr(args, "json", False))
     if not getattr(args, "func", None):
         parser_.print_help(sys.stderr)
         return 1

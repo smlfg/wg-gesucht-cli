@@ -1,5 +1,22 @@
 # wg-gesucht-cli
 
+## Schnellstart
+
+Empfohlen – landet direkt im `PATH`:
+
+```bash
+pipx install git+https://github.com/smlfg/wg-gesucht-cli
+```
+
+Alternative: `pip install --user git+https://github.com/smlfg/wg-gesucht-cli`.
+Wenn der Befehl danach nicht gefunden wird: `pipx` nutzen oder das `bin`-Verzeichnis des venv in den `PATH` aufnehmen.
+
+```bash
+wggesucht search heilbronn --max-rent 500
+wggesucht login
+wggesucht messages list
+```
+
 `wggesucht` ist eine Kommandozeilen-Schnittstelle für
 https://www.wg-gesucht.de, gedacht für KI-Agenten und Menschen:
 
@@ -57,7 +74,7 @@ wggesucht logout
 ## Befehle
 
 ```text
-wggesucht search --city CITY [--rooms {wg,1zimmer,wohnung,haus}]
+wggesucht search [CITY] [--city CITY] [--rooms {wg,1zimmer,wohnung,haus}]
                  [--min-rent N] [--max-rent N]
                  [--min-size N] [--max-size N] [--radius METER]
                  [--move-in-from YYYY-MM-DD] [--move-in-to YYYY-MM-DD]
@@ -78,7 +95,7 @@ wggesucht search --city CITY [--rooms {wg,1zimmer,wohnung,haus}]
                  [--handicapped] [--balcony] [--garden] [--online-tour]
                  [--images-only] [--limit N] [--json]
 wggesucht show OFFER_ID_OR_URL [--json]
-WG_EMAIL=… WG_PASSWORD=… wggesucht login [--json]
+wggesucht login [--json]          # fragt im Terminal; Agenten: WG_EMAIL/WG_PASSWORD
 wggesucht logout [--json]
 wggesucht messages list [--json]
 wggesucht messages read THREAD_ID [--json]

@@ -134,3 +134,101 @@ def test_search_missing_city_is_usage_error(capsys):
     with pytest.raises(SystemExit) as exc:
         cli.main(["search", "--json"])
     assert exc.value.code == 1
+
+
+# ---------- lesbare Ausgabe im Terminal ----------
+
+FIX = ROOT / "tests" / "fixtures"
+
+
+class _HtmlHttp:
+    def __init__(self, html: str):
+        self.html = html
+
+    def get(self, url):
+        return SimpleNamespace(status=200, text=self.html, url=url)
+
+
+def _tty_stdout(monkeypatch):
+    monkeypatch.setattr(cli, "_stdout_is_tty", lambda: True)
+
+
+def test_format_search_readable_line():
+    payload = {
+        "stadt": "Heilbronn",
+        "angebote": [{
+            "id": "123456",
+            "gesamtmiete_euro": 450,
+            "groesse_qm": 14,
+            "typ": "wg",
+            "stadt": "Heilbronn",
+            "stadtteil": "Mitte",
+            "verfuegbar_ab": "2026-12-01",
+        }],
+    }
+    text = cli._format_search(payload)
+    assert (
+        "[1] 450 € | 14 m² | WG-Zimmer | Heilbronn-Mitte | ab 01.12. | ID 123456"
+        in text
+    )
+
+
+def test_search_human_output_on_tty(monkeypatch, capsys):
+    html = (FIX / "search_berlin_wg.html").read_text(encoding="utf-8")
+    monkeypatch.setattr(cli, "HttpClient", lambda: _HtmlHttp(html))
+    _tty_stdout(monkeypatch)
+
+    assert cli.main(["search", "Berlin", "--limit", "1"]) == 0
+    out = capsys.readouterr().out
+    assert not out.lstrip().startswith("{")
+    assert "Angebot(e) in Berlin" in out
+    assert " | ID " in out
+
+
+def test_search_pipe_stays_json_without_flag(monkeypatch, capsys):
+    html = (FIX / "search_berlin_wg.html").read_text(encoding="utf-8")
+    monkeypatch.setattr(cli, "HttpClient", lambda: _HtmlHttp(html))
+    monkeypatch.setattr(cli, "_stdout_is_tty", lambda: False)
+
+    assert cli.main(["search", "Berlin", "--limit", "1"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["stadt"] == "Berlin"
+    assert len(payload["angebote"]) == 1
+
+
+def test_show_human_output_on_tty(monkeypatch, capsys):
+    html = (FIX / "detail_13374505.html").read_text(encoding="utf-8")
+    monkeypatch.setattr(cli, "HttpClient", lambda: _HtmlHttp(html))
+    _tty_stdout(monkeypatch)
+
+    assert cli.main(["show", "13374505"]) == 0
+    out = capsys.readouterr().out
+    assert not out.lstrip().startswith("{")
+    assert "13374505" in out
+    assert "Berlin-Friedrichshagen" in out
+    assert "480 €" in out
+    assert "18 m²" in out
+
+
+def test_messages_list_human_output_on_tty(monkeypatch, capsys):
+    payload = {
+        "user": "x@y.de",
+        "anzahl": 1,
+        "threads": [{
+            "thread_id": "9123456",
+            "subject": "WG-Zimmer in Berlin-Friedrichshagen",
+            "absender": "Lisa M.",
+            "datum": "2026-10-11",
+            "gelesen": False,
+        }],
+    }
+    monkeypatch.setattr(cli, "HttpClient", lambda: object())
+    monkeypatch.setattr(cli.messages, "list_messages", lambda _http: payload)
+    _tty_stdout(monkeypatch)
+
+    assert cli.main(["messages", "list"]) == 0
+    out = capsys.readouterr().out
+    assert not out.lstrip().startswith("{")
+    assert "Lisa M." in out
+    assert "ungelesen" in out
+    assert "ID 9123456" in out

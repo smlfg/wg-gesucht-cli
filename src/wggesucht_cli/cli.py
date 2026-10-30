@@ -31,13 +31,119 @@ from .http_client import (
 )
 
 
-def _emit(payload: Any, as_json: bool) -> None:
-    if as_json:
-        sys.stdout.write(json.dumps(payload, ensure_ascii=False, indent=2))
-        sys.stdout.write("\n")
-    else:
-        sys.stdout.write(json.dumps(payload, ensure_ascii=False, indent=2))
-        sys.stdout.write("\n")
+def _stdout_is_tty() -> bool:
+    try:
+        return bool(sys.stdout.isatty())
+    except (AttributeError, OSError):
+        return False
+
+
+def _emit(payload: Any, as_json: bool, formatter: Any = None) -> None:
+    if not as_json and formatter is not None and _stdout_is_tty():
+        text = formatter(payload)
+        sys.stdout.write(text)
+        if not text.endswith("\n"):
+            sys.stdout.write("\n")
+        return
+    sys.stdout.write(json.dumps(payload, ensure_ascii=False, indent=2))
+    sys.stdout.write("\n")
+
+
+_ROOM_TYPE_LABELS = {
+    "wg": "WG-Zimmer",
+    "1zimmer": "1-Zimmer-Wohnung",
+    "wohnung": "Wohnung",
+    "haus": "Haus",
+}
+
+
+def _format_date(value: Any, *, short: bool = True) -> Optional[str]:
+    if not isinstance(value, str):
+        return None
+    m = re.fullmatch(r"(\d{4})-(\d{2})-(\d{2})", value)
+    if not m:
+        return value
+    year, month, day = m.groups()
+    return f"{day}.{month}." if short else f"{day}.{month}.{year}"
+
+
+def _format_location(item: dict, fallback_city: Optional[str] = None) -> Optional[str]:
+    stadt = item.get("stadt") or fallback_city
+    stadtteil = item.get("stadtteil")
+    if stadt and stadtteil:
+        if stadtteil.lower().startswith(stadt.lower()):
+            return stadtteil
+        return f"{stadt}-{stadtteil}"
+    return stadtteil or stadt
+
+
+def _format_search(payload: dict) -> str:
+    offers = payload.get("angebote") or []
+    stadt = payload.get("stadt") or ""
+    if not offers:
+        return f"Keine Angebote in {stadt} gefunden.\n"
+    lines = [f"{len(offers)} Angebot(e) in {stadt}:"]
+    for index, offer in enumerate(offers, 1):
+        rent = offer.get("gesamtmiete_euro")
+        size = offer.get("groesse_qm")
+        rent_text = f"{rent} €" if rent is not None else "Miete k.A."
+        size_text = f"{size} m²" if size is not None else "Größe k.A."
+        typ = offer.get("typ") or ""
+        typ_text = _ROOM_TYPE_LABELS.get(typ, typ or "Angebot")
+        line = (
+            f"[{index}] {rent_text} | {size_text} | {typ_text} | "
+            f"{_format_location(offer, stadt) or 'Ort k.A.'}"
+        )
+        available = _format_date(offer.get("verfuegbar_ab"))
+        if available:
+            line += f" | ab {available}"
+        line += f" | ID {offer.get('id') or '?'}"
+        lines.append(line)
+    return "\n".join(lines) + "\n"
+
+
+def _format_show(payload: dict) -> str:
+    angebot = payload.get("angebot") or {}
+    lines = [angebot.get("titel") or "Anzeige"]
+    meta: list[str] = []
+    if angebot.get("id"):
+        meta.append(f"ID {angebot['id']}")
+    location = _format_location(angebot)
+    if location:
+        meta.append(location)
+    if angebot.get("groesse_qm") is not None:
+        meta.append(f"{angebot['groesse_qm']} m²")
+    if angebot.get("kaltmiete_euro") is not None:
+        meta.append(f"{angebot['kaltmiete_euro']} €")
+    available = _format_date(angebot.get("verfuegbar_ab"), short=False)
+    if available:
+        meta.append(f"verfügbar ab {available}")
+    if meta:
+        lines.append(" | ".join(meta))
+    if angebot.get("url"):
+        lines.append(str(angebot["url"]))
+    description = angebot.get("beschreibung_text")
+    if description:
+        lines.extend(["", str(description)])
+    return "\n".join(lines) + "\n"
+
+
+def _format_messages_list(payload: dict) -> str:
+    threads = payload.get("threads") or []
+    if not threads:
+        return "Posteingang ist leer.\n"
+    lines = [f"Posteingang ({len(threads)} Thread(s)):"]
+    for index, thread in enumerate(threads, 1):
+        sender = thread.get("absender") or "Unbekannt"
+        datum = thread.get("datum") or "unbekannt"
+        subject = thread.get("subject") or thread.get("vorschau") or "ohne Betreff"
+        status = "gelesen" if thread.get("gelesen") else "ungelesen"
+        line = (
+            f"[{index}] {sender} | {datum} | {subject} | {status} | "
+            f"ID {thread.get('thread_id') or '?'}"
+        )
+        lines.append(line)
+    return "\n".join(lines) + "\n"
 
 
 def _err(msg: str, *, code: int, **extra: Any) -> NoReturn:
@@ -237,7 +343,7 @@ def cmd_search(args: argparse.Namespace) -> int:
         "anzahl": len(offers),
         "angebote": offers,
     }
-    _emit(payload, args.json)
+    _emit(payload, args.json, _format_search)
     return 0
 
 
@@ -264,7 +370,7 @@ def cmd_show(args: argparse.Namespace) -> int:
         ang["id"] = offer_id
     if not ang.get("url"):
         ang["url"] = r.url
-    _emit({"quelle": "https://www.wg-gesucht.de", "angebot": ang}, args.json)
+    _emit({"quelle": "https://www.wg-gesucht.de", "angebot": ang}, args.json, _format_show)
     return 0
 
 
@@ -294,7 +400,7 @@ def cmd_messages_list(args: argparse.Namespace) -> int:
         _err(str(e), code=2, kind=e.code, hint="wggesucht login")
     except HTTPError as e:
         _err(f"HTTP-Fehler: {e}", code=3, status=e.status)
-    _emit(res, args.json)
+    _emit(res, args.json, _format_messages_list)
     return 0
 
 

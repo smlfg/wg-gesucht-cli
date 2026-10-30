@@ -14,7 +14,7 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from wggesucht_cli import auth  # noqa: E402
+from wggesucht_cli import auth, cli  # noqa: E402
 from wggesucht_cli.http_client import AuthError  # noqa: E402
 
 
@@ -97,3 +97,40 @@ def test_login_help_mentions_env_for_agents():
     assert r.returncode == 0
     assert "WG_EMAIL/WG_PASSWORD" in r.stdout
     assert "Fragt E-Mail und Passwort ab" in r.stdout
+
+
+# ---------- search: Stadt positional ----------
+
+class _FakeResp:
+    status = 200
+    text = "<html><body></body></html>"
+    url = "https://www.wg-gesucht.de/"
+
+
+class _FakeHttp:
+    def __init__(self):
+        self.urls: list[str] = []
+
+    def get(self, url):
+        self.urls.append(url)
+        return _FakeResp()
+
+
+def test_search_positional_city_matches_city_option(monkeypatch, capsys):
+    http = _FakeHttp()
+    monkeypatch.setattr(cli, "HttpClient", lambda: http)
+
+    assert cli.main(["search", "heilbronn", "--max-rent", "500", "--json"]) == 0
+    positional = json.loads(capsys.readouterr().out)
+    assert cli.main(["search", "--city", "heilbronn", "--max-rent", "500", "--json"]) == 0
+    option = json.loads(capsys.readouterr().out)
+
+    assert positional["url"] == option["url"]
+    assert "Heilbronn.60" in positional["url"]
+    assert positional["stadt"] == "heilbronn"
+
+
+def test_search_missing_city_is_usage_error(capsys):
+    with pytest.raises(SystemExit) as exc:
+        cli.main(["search", "--json"])
+    assert exc.value.code == 1

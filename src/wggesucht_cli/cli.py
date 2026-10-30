@@ -127,6 +127,18 @@ def _client_filter(args: argparse.Namespace, offers: list[dict]) -> list[dict]:
 
 
 def cmd_search(args: argparse.Namespace) -> int:
+    city_arg = args.city or getattr(args, "city_pos", None)
+    if not city_arg:
+        _err(
+            "Stadt fehlt: `wggesucht search STADT` oder `--city STADT` angeben.",
+            code=1,
+        )
+    if args.city and getattr(args, "city_pos", None) and args.city != args.city_pos:
+        _err(
+            "Stadt nur einmal angeben (positional oder --city).",
+            code=1,
+        )
+    args.city = city_arg
     city = cities.resolve_city(args.city)
     if not city:
         _err(
@@ -402,7 +414,17 @@ def _build_parser() -> argparse.ArgumentParser:
     sub = p.add_subparsers(dest="cmd", metavar="SUBCOMMAND")
     # search
     s = sub.add_parser("search", help="WG-/Wohnungs-Angebote suchen")
-    s.add_argument("--city", required=True, help="Stadt, z.B. Berlin oder Heilbronn")
+    s.add_argument(
+        "city_pos",
+        nargs="?",
+        metavar="STADT",
+        help="Stadt, z.B. Heilbronn (Alternative zu --city)",
+    )
+    s.add_argument(
+        "--city",
+        default=None,
+        help="Stadt, z.B. Berlin oder Heilbronn (weiterhin unterstützt)",
+    )
     s.add_argument(
         "--rooms",
         choices=["wg", "1zimmer", "wohnung", "haus"],

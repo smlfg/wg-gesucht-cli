@@ -98,6 +98,16 @@ def search_html():
 
 
 @pytest.fixture
+def search_stuttgart_new_html():
+    return (FIX / "search_stuttgart_new.html").read_text(encoding="utf-8")
+
+
+@pytest.fixture
+def search_blocked_html():
+    return (FIX / "search_blocked.html").read_text(encoding="utf-8")
+
+
+@pytest.fixture
 def detail_html():
     return (FIX / "detail_13374505.html").read_text(encoding="utf-8")
 
@@ -200,6 +210,31 @@ def test_parse_search_verfuegbar_bis_from_middle_row_only(search_html):
         and o["id"] in {"12329701", "4668942", "14059016"}
     ]
     assert bogus_bis_eq_ab == []
+
+
+def test_parse_search_new_card_markup_as_anchor(search_stuttgart_new_html):
+    """Regression: Live-Karten sind <a class="wgg-list-card offer_list_item">."""
+    offers = parser.parse_search(search_stuttgart_new_html, limit=10)
+    assert [o["id"] for o in offers] == ["9000001", "9000002"]
+    first = offers[0]
+    assert first["url"] == "https://www.wg-gesucht.de/wg-zimmer-in-Stuttgart-Ost.9000001.html"
+    assert first["titel"] == "Helles Zimmer in Muster-WG"
+    assert first["stadt"] == "Stuttgart"
+    assert first["stadtteil"] == "Ost"
+    assert first["strasse"] == "Musterstraße 1"
+    assert first["gesamtmiete_euro"] == 350
+    assert first["groesse_qm"] == 18
+    assert first["verfuegbar_ab"] == "2026-12-01"
+    assert first["mitbewohner_anzahl"] == 4
+    assert first["mitbewohner_maennlich"] == 2
+    second = offers[1]
+    assert second["verfuegbar_ab"] == "2026-11-15"
+    assert second["verfuegbar_bis"] == "2027-04-30"
+
+
+def test_looks_blocked_detects_captcha_page(search_blocked_html, search_html):
+    assert parser.looks_blocked(search_blocked_html) is True
+    assert parser.looks_blocked(search_html) is False
 
 
 def test_parse_search_mitbewohner_gender_from_noprint_title(search_html):

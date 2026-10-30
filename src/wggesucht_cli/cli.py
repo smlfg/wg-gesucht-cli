@@ -294,12 +294,27 @@ def cmd_search(args: argparse.Namespace) -> int:
         r = http.get(url)
     except HTTPError as e:
         _err(f"HTTP-Fehler: {e}", code=3, status=e.status)
+    if r.status in (403, 429):
+        _err(
+            "wg-gesucht blockiert gerade (Captcha) – später erneut",
+            code=3,
+            kind="blocked",
+            status=r.status,
+            url=url,
+        )
     if r.status >= 400:
         _err(f"HTTP {r.status} beim Laden der Suche", code=3, status=r.status, url=url)
     try:
         offers = parser.parse_search(r.text, limit=args.limit or 20, room_type=rooms)
     except ParseError as e:
         _err(f"Parse-Fehler: {e}", code=4, url=url)
+    if not offers and parser.looks_blocked(r.text):
+        _err(
+            "wg-gesucht blockiert gerade (Captcha) – später erneut",
+            code=3,
+            kind="blocked",
+            url=url,
+        )
     offers = _client_filter(args, offers)
     payload = {
         "quelle": "https://www.wg-gesucht.de",

@@ -232,3 +232,28 @@ def test_messages_list_human_output_on_tty(monkeypatch, capsys):
     assert "Lisa M." in out
     assert "ungelesen" in out
     assert "ID 9123456" in out
+
+
+# ---------- Captcha-/Sperrseite ----------
+
+def test_search_block_page_reports_captcha(monkeypatch, capsys):
+    html = (FIX / "search_blocked.html").read_text(encoding="utf-8")
+    monkeypatch.setattr(cli, "HttpClient", lambda: _HtmlHttp(html))
+    monkeypatch.setattr(cli, "_stdout_is_tty", lambda: False)
+    with pytest.raises(SystemExit) as exc:
+        cli.main(["search", "Stuttgart", "--json"])
+    assert exc.value.code == 3
+    payload = json.loads(capsys.readouterr().err)
+    assert payload["kind"] == "blocked"
+    assert "blockiert gerade (Captcha)" in payload["error"]
+
+
+def test_search_new_card_markup_on_tty(monkeypatch, capsys):
+    html = (FIX / "search_stuttgart_new.html").read_text(encoding="utf-8")
+    monkeypatch.setattr(cli, "HttpClient", lambda: _HtmlHttp(html))
+    _tty_stdout(monkeypatch)
+    assert cli.main(["search", "Stuttgart", "--limit", "1"]) == 0
+    out = capsys.readouterr().out
+    assert "Angebot(e) in Stuttgart" in out
+    assert "350 €" in out
+    assert "ID 9000001" in out

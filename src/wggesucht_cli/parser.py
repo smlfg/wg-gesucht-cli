@@ -151,24 +151,70 @@ def _location_from_address(
     return stadt or slug_stadt, stadtteil
 
 
+_BLOCK_TITLE_MARKERS = (
+    "captcha",
+    "sicherheitsabfrage",
+    "zugriff verweigert",
+    "access denied",
+    "zu viele anfragen",
+    "rate limit",
+    "unusual traffic",
+    "blocked",
+)
+_BLOCK_BODY_MARKERS = (
+    "bitte bestätige, dass du ein mensch bist",
+    "bitte bestaetige, dass du ein mensch bist",
+    "unusual traffic",
+    "automatisierte zugriffe",
+    "zu viele anfragen",
+    "deine anfrage wurde blockiert",
+    "access to this page has been denied",
+)
+
+
+def looks_blocked(html: str) -> bool:
+    """Erkennt Captcha-/Sperrseiten (nicht die versteckten Formularfelder)."""
+    soup = BeautifulSoup(html, "lxml")
+    title = _text(soup.title).lower() if soup.title else ""
+    headings = " ".join(
+        _text(h).lower() for h in soup.find_all(["h1", "h2"])[:5]
+    )
+    head_text = f"{title} {headings}"
+    if any(marker in head_text for marker in _BLOCK_TITLE_MARKERS):
+        return True
+    body = _text(soup.body)[:4000].lower() if soup.body else ""
+    return any(marker in body for marker in _BLOCK_BODY_MARKERS)
+
+
+def _is_offer_card(tag) -> bool:
+    """Erkennt Anzeigenkarten in alter (<div>) und neuer (<a>) Struktur."""
+    classes = tag.get("class") or []
+    return "offer_list_item" in classes or "wgg_card" in classes
+
+
 def parse_search(html: str, *, limit: int = 20, room_type: str = "wg") -> list[dict]:
     """Parst die Liste der Anzeigen."""
     soup = BeautifulSoup(html, "lxml")
-    cards = soup.find_all("div", class_=re.compile(r"offer_list_item"))
+    # Seit 2026-10 ist die Karte selbst ein <a class="wgg-list-card offer_list_item">,
+    # früher war sie ein <div class="wgg_card offer_list_item">.
+    cards = soup.find_all(_is_offer_card)
     results: list[dict] = []
     for card in cards:
         oid = card.get("data-id")
         if not oid:
             # Anzeigenkarten haben immer eine data-id. Werbung/Ad-Container nicht.
             continue
-        link = card.find("a", href=re.compile(r"/(wg-zimmer|1-zimmer-wohnungen|wohnungen|haeuser)-in-"))
+        link = card if card.name == "a" and card.get("href") else card.find(
+            "a", href=re.compile(r"/(wg-zimmer|1-zimmer-wohnungen|wohnungen|haeuser)-in-")
+        )
         if not link or not link.get("href"):
             continue
         href = urljoin(BASE, link["href"])
         title_node = card.find("h2", class_=re.compile(r"truncate_title"))
         title = _text(title_node) if title_node else None
         stadt, stadtteil, _slug = _slug_from_url(href)
-        # Ort/Stadtteil/Straße – ein <span> enthält "Xer WG | Berlin Stadtteil | Straße"
+        # Ort/Stadtteil/Straße – alt: <span> "Xer WG | Berlin Stadtteil | Straße",
+        # neu: card-details-text mit title "4er WG · Stuttgart Ost · Straße".
         ort_text = None
         for span in card.find_all("span"):
             txt = span.get_text(" ", strip=True)
@@ -194,11 +240,22 @@ def parse_search(html: str, *, limit: int = 20, room_type: str = "wg") -> list[d
                     stadtteil_text = " ".join(tokens[1:])
         if len(ort_parts) >= 3:
             strasse = ort_parts[2].strip() or None
-        # Miete / Größe / Verfügbarkeit. Wir betrachten nur die direkten
-        # Kinder des Cards mit class="row" (Titel/Adresse/Mitte/Unten),
-        # keine rekursiv verschachtelten divs, damit z. B. "0m" aus
-        # "title=2er WG (0w,0m,…)" oder "mdi-20px" nicht als Größe
-        # erkannt werden.
+        details = card.find(class_=re.compile(r"card-details-text"))
+        if details is not None:
+            detail_text = _norm_ws(details.get("title") or details.get_text(" "))
+            detail_parts = [p.strip() for p in re.split(r"\s*[·|]\s*", detail_text) if p.strip()]
+            if len(detail_parts) >= 2:
+                ort2 = detail_parts[1]
+                tokens = ort2.split()
+                if stadt and tokens and tokens[0].lower() == stadt.lower():
+                    stadtteil_text = " ".join(tokens[1:]) or None
+                elif tokens:
+                    stadt_text = tokens[0]
+                    stadtteil_text = " ".join(tokens[1:]) or None
+            if len(detail_parts) >= 3:
+                strasse = detail_parts[2] or None
+        # Miete / Größe / Verfügbarkeit. Alt: direkte Kinder mit class="row"
+        # (Titel/Adresse/Mitte/Unten). Neu: price-row und middle-row.
         rent = None
         size = None
         avail_from = None
@@ -211,6 +268,18 @@ def parse_search(html: str, *, limit: int = 20, room_type: str = "wg") -> list[d
                     rent = _eur_to_int(m.group(1))
             if size is None and ("m&sup2;" in inner_html or "m²" in inner_html):
                 m = re.search(r"(\d[\d.,]*)\s*(?:m&sup2;|m²)", inner_html)
+                if m:
+                    size = _qm_to_int(m.group(1))
+        if rent is None:
+            price_node = card.find(class_=re.compile(r"\bprice-row\b"))
+            if price_node is not None:
+                m = re.search(r"(\d[\d.,]*)\s*(?:€|&euro;)", price_node.get_text(" "))
+                if m:
+                    rent = _eur_to_int(m.group(1))
+        if size is None:
+            middle_node = card.find(class_=re.compile(r"\bmiddle-row\b"))
+            if middle_node is not None:
+                m = re.search(r"(\d[\d.,]*)\s*(?:m²|m&sup2;)", middle_node.get_text(" "))
                 if m:
                     size = _qm_to_int(m.group(1))
         avail_from, avail_to = _parse_search_availability(card)

@@ -24,8 +24,9 @@ https://www.wg-gesucht.de, gedacht für KI-Agenten und Menschen:
   nach Stadt, Größe, Miete filtern.
 - **Anzeigen-Details** (öffentlich): voller Anzeigentext.
 - **Login** + **Posteingang lesen** mit persistenter Session.
-- **Nachricht senden** – aber **nur** mit explizitem `--confirm`,
-  damit kein Agent versehentlich Spam produziert.
+- **Nachricht senden** – im Terminal mit Zusammenfassung und
+  `[j/N]`-Rückfrage; Agenten bestätigen explizit mit `--confirm`,
+  damit kein versehentlicher Spam entsteht.
 
 Unterscheidung zu bestehenden Scrapern (z. B.
 `wg-gesucht-crawler-cli`, `WG-Scraper`):
@@ -37,8 +38,9 @@ Unterscheidung zu bestehenden Scrapern (z. B.
 - **Login-Erfolg braucht einen Beweis** – ein Cookie allein
   reicht nicht, der Tool ruft eine nur-für-Eingeloggte sichtbare
   Seite ab.
-- **Kein Auto-Spam**: `messages send` ohne `--confirm` → Exit 5,
-  es wird **nichts** abgeschickt.
+- **Kein Auto-Spam**: `messages send` fragt im Terminal `[j/N]`;
+  ohne TTY braucht es `--confirm`, sonst Exit 5 und es wird
+  **nichts** abgeschickt.
 - **Tests ohne Netz**: Pytest-Suite mit HTML-Fixtures, gegen
   wg-gesucht.de wird nur optional live gesmoket.
 
@@ -99,7 +101,7 @@ wggesucht login [--json]          # fragt im Terminal; Agenten: WG_EMAIL/WG_PASS
 wggesucht logout [--json]
 wggesucht messages list [--json]
 wggesucht messages read THREAD_ID [--json]
-wggesucht messages send --to OFFER_OR_USER --text "..." --confirm [--json]
+wggesucht messages send --to OFFER_OR_USER --text "..." [--confirm] [--json]
 wggesucht --version
 wggesucht --help
 ```
@@ -168,7 +170,14 @@ Thread lesen:
 wggesucht messages read 9123456 --json
 ```
 
-Antwort senden (verlangt `--confirm`):
+Antwort senden: Im Terminal zeigt der Befehl Empfänger und Text und
+fragt `Nachricht verbindlich senden? [j/N]`. Nur `j`/`ja` schickt die
+Nachricht ab. Agenten ohne TTY bestätigen mit `--confirm`:
+
+```bash
+wggesucht messages send --to 4668942 \
+  --text "Hi, ist das Zimmer noch frei? Wann könnte ich vorbeikommen?"
+```
 
 ```bash
 wggesucht messages send --to 4668942 \
@@ -176,11 +185,13 @@ wggesucht messages send --to 4668942 \
   --confirm --json
 ```
 
-Ohne `--confirm` → Exit 5, **nichts** wird abgeschickt:
+Ohne TTY und ohne `--confirm` → Exit 5, **nichts** wird abgeschickt.
+Im Terminal führen `N`, leere Eingabe, EOF oder Strg+C zu
+`Abgebrochen, nichts gesendet.` mit Exit 0:
 
 ```bash
 wggesucht messages send --to 4668942 --text "…"
-# echo "Exit: $?"   → 5
+# echo "Exit: $?"   → 5 (ohne TTY und ohne --confirm)
 ```
 
 ## JSON-Konvention
@@ -208,7 +219,7 @@ wggesucht messages send --to 4668942 --text "…"
 | 2    | Auth / Session                                                       |
 | 3    | Netzwerk / HTTP-Fehler                                               |
 | 4    | Parse-Fehler                                                         |
-| 5    | Aktion verweigert (z. B. `send` ohne `--confirm`)                    |
+| 5    | Aktion verweigert (z. B. `send` ohne TTY und ohne `--confirm`)       |
 
 ## Sicherheits-Modell
 
@@ -216,8 +227,8 @@ wggesucht messages send --to 4668942 --text "…"
   in JSON-Ausgaben geschrieben.
 - Session-Cookies: Modus `0600`, Cookie-Allowlist
   `.wg-gesucht.de` (kein Identity-Provider).
-- `messages send` ohne `--confirm`: Exit 5, keine Vorschau-Aktion
-  wird ausgelöst.
+- `messages send` fragt im Terminal `[j/N]`; ohne TTY ist
+  `--confirm` Pflicht, sonst Exit 5 und keine Vorschau-Aktion.
 - Persistente Daten (außer der Session) bleiben auf dem Gerät.
 
 ## Tests

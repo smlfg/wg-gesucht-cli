@@ -25,7 +25,7 @@ geht auf stderr.
 | 2    | Auth / Session                                                       |
 | 3    | Netzwerk / HTTP-Fehler                                               |
 | 4    | Parse-Fehler (unerwartetes HTML)                                     |
-| 5    | Aktion verweigert (z. B. `send` ohne `--confirm`)                    |
+| 5    | Aktion verweigert (z. B. `send` ohne TTY und ohne `--confirm`)       |
 
 ## Befehle
 
@@ -193,11 +193,16 @@ wggesucht messages read THREAD_ID [--json]
 ### `wggesucht messages send`
 
 ```
-wggesucht messages send --to OFFER_OR_USER --text "..." --confirm
+wggesucht messages send --to OFFER_OR_USER --text "..." [--confirm]
 ```
 
-- **Ohne** `--confirm` → Exit 5, **nichts wird abgeschickt**.
-  Es gibt auch keine Vorschau-Anzeige, die das Senden
+- Im Terminal (stdin und stdout TTY) zeigt der Befehl Empfänger und
+  Text und fragt `Nachricht verbindlich senden? [j/N]`. Nur `j`/`ja`
+  sendet; `N`, leere Eingabe, EOF oder Strg+C brechen mit
+  `Abgebrochen, nichts gesendet.` und Exit 0 ab, ohne Request.
+- `--confirm` überspringt die Rückfrage (für Agenten).
+- Ohne TTY und ohne `--confirm` → Exit 5, **nichts wird
+  abgeschickt**. Es gibt keine Vorschau-Anzeige, die das Senden
   initiiert.
 - `--to`: Anzeigen-ID/URL oder Nutzername.
 - JSON:
@@ -239,5 +244,5 @@ Standard argparse-Verhalten.
 - `messages list` / `messages read` ohne gültige Session:
   Exit 2 mit JSON `{ "error": "no_session", "hint":
   "wggesucht login" }`.
-- `messages send` ohne `--confirm`: Exit 5, JSON
+- `messages send` ohne TTY und ohne `--confirm`: Exit 5, JSON
   `{ "error": "confirm_required", "hint": "..." }`.

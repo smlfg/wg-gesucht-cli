@@ -369,3 +369,17 @@ def test_send_without_tty_requires_confirm_without_request(monkeypatch, capsys):
     payload = json.loads(capsys.readouterr().err)
     assert payload["kind"] == "confirm_required"
     assert calls == []
+
+
+def test_send_json_prompt_goes_to_stderr(monkeypatch, capsys):
+    calls = _patch_send(monkeypatch)
+    _tty_both(monkeypatch)
+    monkeypatch.setattr("builtins.input", lambda: "j")
+
+    assert cli.main([
+        "messages", "send", "--to", "9000002", "--text", "Hallo", "--json",
+    ]) == 0
+    captured = capsys.readouterr()
+    assert "[j/N]" in captured.err
+    assert json.loads(captured.out) == {"ok": True, "an": "9000002"}
+    assert len(calls) == 1

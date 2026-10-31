@@ -484,17 +484,18 @@ def _confirm_send(args: argparse.Namespace) -> bool:
             code=5,
             kind="confirm_required",
         )
-    sys.stdout.write(f"Nachricht an {args.to}:\n{args.text}\n")
-    sys.stdout.write("Nachricht verbindlich senden? [j/N] ")
-    sys.stdout.flush()
+    stream = sys.stderr if args.json else sys.stdout
+    stream.write(f"Nachricht an {args.to}:\n{args.text}\n")
+    stream.write("Nachricht verbindlich senden? [j/N] ")
+    stream.flush()
     try:
         answer = input()
     except (EOFError, KeyboardInterrupt):
-        sys.stdout.write("\nAbgebrochen, nichts gesendet.\n")
+        stream.write("\nAbgebrochen, nichts gesendet.\n")
         return False
     if answer.strip().lower() in {"j", "ja", "y", "yes"}:
         return True
-    sys.stdout.write("Abgebrochen, nichts gesendet.\n")
+    stream.write("Abgebrochen, nichts gesendet.\n")
     return False
 
 

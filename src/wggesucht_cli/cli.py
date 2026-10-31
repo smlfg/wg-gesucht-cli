@@ -48,6 +48,13 @@ def _stderr_is_tty() -> bool:
         return False
 
 
+def _stdin_is_tty() -> bool:
+    try:
+        return bool(sys.stdin.isatty())
+    except (AttributeError, OSError):
+        return False
+
+
 def _emit(payload: Any, as_json: bool, formatter: Any = None) -> None:
     if not as_json and formatter is not None and _stdout_is_tty():
         text = formatter(payload)
@@ -159,6 +166,11 @@ def _format_messages_list(payload: dict) -> str:
 def _format_login(payload: dict) -> str:
     user = payload.get("user") or "unbekannt"
     return f"Angemeldet als {user}.\n"
+
+
+def _format_messages_send(payload: dict) -> str:
+    to = payload.get("an") or "unbekannt"
+    return f"Nachricht an {to} gesendet.\n"
 
 
 def _err(
@@ -462,13 +474,32 @@ def cmd_messages_read(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_messages_send(args: argparse.Namespace) -> int:
-    if not args.confirm:
+def _confirm_send(args: argparse.Namespace) -> bool:
+    if args.confirm:
+        return True
+    if not (_stdin_is_tty() and _stdout_is_tty()):
         _err(
             "Senden verlangt --confirm; ohne wird nichts abgeschickt.",
             code=5,
             kind="confirm_required",
         )
+    sys.stdout.write(f"Nachricht an {args.to}:\n{args.text}\n")
+    sys.stdout.write("Nachricht verbindlich senden? [j/N] ")
+    sys.stdout.flush()
+    try:
+        answer = input()
+    except (EOFError, KeyboardInterrupt):
+        sys.stdout.write("\nAbgebrochen, nichts gesendet.\n")
+        return False
+    if answer.strip().lower() in {"j", "ja", "y", "yes"}:
+        return True
+    sys.stdout.write("Abgebrochen, nichts gesendet.\n")
+    return False
+
+
+def cmd_messages_send(args: argparse.Namespace) -> int:
+    if not _confirm_send(args):
+        return 0
     http = HttpClient()
     try:
         res = messages.send_message(
@@ -480,7 +511,7 @@ def cmd_messages_send(args: argparse.Namespace) -> int:
         _err(str(e), code=2, kind=e.code, hint="wggesucht login")
     except HTTPError as e:
         _err(f"HTTP-Fehler: {e}", code=3, status=e.status)
-    _emit(res, args.json)
+    _emit(res, args.json, _format_messages_send)
     return 0
 
 
@@ -613,10 +644,17 @@ def _build_parser() -> argparse.ArgumentParser:
     mr.add_argument("thread_id")
     mr.add_argument("--json", action="store_true")
     mr.set_defaults(func=cmd_messages_read)
-    ms = msub.add_parser("send", help="Nachricht senden (nur mit --confirm)")
+    ms = msub.add_parser(
+        "send",
+        help="Nachricht senden (fragt [j/N]; --confirm für Agenten)",
+    )
     ms.add_argument("--to", required=True, help="Empfänger (User-ID oder Anzeigen-ID)")
     ms.add_argument("--text", required=True, help="Nachrichtentext")
-    ms.add_argument("--confirm", action="store_true", help="Explizit bestätigen")
+    ms.add_argument(
+        "--confirm",
+        action="store_true",
+        help="Bestätigung überspringen (für Agenten ohne TTY)",
+    )
     ms.add_argument("--json", action="store_true")
     ms.set_defaults(func=cmd_messages_send)
     return p

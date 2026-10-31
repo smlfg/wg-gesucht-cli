@@ -280,3 +280,91 @@ def test_login_pipe_stays_json_without_flag(monkeypatch, capsys):
 
     assert cli.main(["login"]) == 0
     assert json.loads(capsys.readouterr().out)["user"] == "test@example.org"
+
+
+# ---------- messages send: Bestätigung und lesbare Ausgabe ----------
+
+def _tty_both(monkeypatch):
+    _tty_stdout(monkeypatch)
+    monkeypatch.setattr(cli, "_stdin_is_tty", lambda: True)
+
+
+def _patch_send(monkeypatch):
+    calls = []
+
+    def _send(_http, *, to, text, confirm):
+        calls.append({"to": to, "text": text, "confirm": confirm})
+        return {"ok": True, "an": to}
+
+    monkeypatch.setattr(cli, "HttpClient", lambda: object())
+    monkeypatch.setattr(cli.messages, "send_message", _send)
+    return calls
+
+
+def test_send_human_output_on_tty_with_confirm(monkeypatch, capsys):
+    calls = _patch_send(monkeypatch)
+    _tty_both(monkeypatch)
+    monkeypatch.setattr("builtins.input", lambda: pytest.fail("keine Frage mit --confirm"))
+
+    assert cli.main(["messages", "send", "--to", "9000002", "--text", "Hallo", "--confirm"]) == 0
+    out = capsys.readouterr().out
+    assert out == "Nachricht an 9000002 gesendet.\n"
+    assert calls == [{"to": "9000002", "text": "Hallo", "confirm": True}]
+
+
+def test_send_interactive_yes_sends(monkeypatch, capsys):
+    calls = _patch_send(monkeypatch)
+    _tty_both(monkeypatch)
+    monkeypatch.setattr("builtins.input", lambda: "j")
+
+    assert cli.main(["messages", "send", "--to", "9000002", "--text", "Hallo"]) == 0
+    out = capsys.readouterr().out
+    assert "Nachricht an 9000002:" in out
+    assert "Hallo" in out
+    assert "[j/N]" in out
+    assert "Nachricht an 9000002 gesendet." in out
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize("answer", ["N", "", "nein"])
+def test_send_interactive_no_sends_nothing(monkeypatch, capsys, answer):
+    calls = _patch_send(monkeypatch)
+    _tty_both(monkeypatch)
+    monkeypatch.setattr("builtins.input", lambda: answer)
+
+    assert cli.main(["messages", "send", "--to", "9000002", "--text", "Hallo"]) == 0
+    out = capsys.readouterr().out
+    assert "[j/N]" in out
+    assert "Abgebrochen, nichts gesendet." in out
+    assert calls == []
+
+
+@pytest.mark.parametrize("error", [EOFError, KeyboardInterrupt])
+def test_send_interactive_eof_or_ctrl_c_sends_nothing(monkeypatch, capsys, error):
+    calls = _patch_send(monkeypatch)
+    _tty_both(monkeypatch)
+
+    def _raise():
+        raise error()
+
+    monkeypatch.setattr("builtins.input", _raise)
+
+    assert cli.main(["messages", "send", "--to", "9000002", "--text", "Hallo"]) == 0
+    out = capsys.readouterr().out
+    assert "Abgebrochen, nichts gesendet." in out
+    assert calls == []
+
+
+def test_send_without_tty_requires_confirm_without_request(monkeypatch, capsys):
+    calls = _patch_send(monkeypatch)
+    monkeypatch.setattr(cli, "_stdout_is_tty", lambda: False)
+    monkeypatch.setattr(cli, "_stdin_is_tty", lambda: False)
+    monkeypatch.setattr(cli, "_stderr_is_tty", lambda: False)
+    monkeypatch.setattr("builtins.input", lambda: pytest.fail("keine Frage ohne TTY"))
+
+    with pytest.raises(SystemExit) as exc:
+        cli.main(["messages", "send", "--to", "9000002", "--text", "Hallo"])
+    assert exc.value.code == 5
+    payload = json.loads(capsys.readouterr().err)
+    assert payload["kind"] == "confirm_required"
+    assert calls == []

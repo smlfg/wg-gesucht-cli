@@ -526,26 +526,51 @@ def normalize_offer_input(s: str) -> str:
     raise ValueError(f"konnte keine Anzeigen-ID aus {s!r} ableiten")
 
 
+def _form_fields(form) -> dict[str, str]:
+    """Sammelt benannte Eingabefelder (inkl. versteckter Tokens) eines Formulars."""
+    fields: dict[str, str] = {}
+    if form is None:
+        return fields
+    for node in form.find_all(["input", "textarea"]):
+        name = node.get("name")
+        if not name:
+            continue
+        if node.name == "input":
+            t = (node.get("type") or "").lower()
+            value = node.get("value", "")
+            if t in {"submit", "button", "reset", "image", "file"}:
+                continue
+        else:
+            value = node.get_text()
+        fields[name] = value
+    return fields
+
+
 def parse_login_form(html: str) -> dict:
     """Extrahiert versteckte Felder (z. B. csrf-Token) aus dem Login-Formular."""
     soup = BeautifulSoup(html, "lxml")
     form = soup.find("form", id=re.compile(r"login|signin", re.I))
     if form is None:
         form = soup.find("form", action=re.compile(r"login|signin|authent", re.I))
-    fields: dict[str, str] = {}
-    if form is not None:
-        for inp in form.find_all("input"):
-            name = inp.get("name")
-            if not name:
-                continue
-            t = (inp.get("type") or "").lower()
-            value = inp.get("value", "")
-            if t == "submit":
-                continue
-            fields[name] = value
     return {
         "action": form.get("action") if form else None,
-        "fields": fields,
+        "fields": _form_fields(form),
+    }
+
+
+def parse_send_form(html: str) -> dict:
+    """Extrahiert Aktion und Felder (inkl. csrf_token) aus dem Kontaktformular."""
+    soup = BeautifulSoup(html, "lxml")
+    form = soup.find("form", id=re.compile(r"send|message|kontakt", re.I))
+    if form is None:
+        form = soup.find(
+            "form", action=re.compile(r"send-message|nachricht-senden", re.I)
+        )
+    if form is None:
+        form = soup.find("form", method=re.compile(r"post", re.I))
+    return {
+        "action": form.get("action") if form else None,
+        "fields": _form_fields(form),
     }
 
 

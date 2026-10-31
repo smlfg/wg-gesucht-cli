@@ -313,6 +313,14 @@ def test_parse_login_form(login_html):
     assert info["fields"]["csrf"] == "abc123"
 
 
+def test_parse_send_form_includes_csrf_token():
+    html = (FIX / "ux" / "contact_send_form.html").read_text(encoding="utf-8")
+    info = parser.parse_send_form(html)
+    assert info["action"] == "/nachrichten/send-message.html"
+    assert info["fields"]["csrf_token"] == "dummy-csrf"
+    assert info["fields"]["user_id"] == "9000002"
+
+
 def test_looks_logged_in():
     assert parser.looks_logged_in('<a href="/nachrichten.html">Nachrichten</a>')
     assert parser.looks_logged_in('<a href="/x">Abmelden</a>')
@@ -584,6 +592,27 @@ def test_messages_send_requires_confirm(tmp_path, monkeypatch):
         messages.send_message(http, to="13374505", text="hi", confirm=False)
 
 
+def test_messages_send_posts_csrf_token(tmp_path, monkeypatch):
+    p = tmp_path / "session.json"
+    save_session(str(p), email="x@y.de", cookies=[{
+        "name": "PHPSESSID", "value": "abc", "domain": ".wg-gesucht.de", "path": "/"
+    }])
+    monkeypatch.setattr(auth, "session_path", lambda: str(p))
+    base = "https://www.wg-gesucht.de"
+    form = (FIX / "ux" / "contact_send_form.html").read_text(encoding="utf-8")
+    confirmed = (FIX / "ux" / "send_confirmed.html").read_text(encoding="utf-8")
+    http = FakeHttp({
+        base + "/nachrichten/send-message.html?user_id=9000002": (200, form),
+        base + "/nachrichten/send-message.html": (200, confirmed),
+    })
+    res = messages.send_message(http, to="9000002", text="Hallo", confirm=True)
+    assert res["ok"] is True
+    body = http.calls[-1][2]["body"]
+    assert body["csrf_token"] == "dummy-csrf"
+    assert body["user_id"] == "9000002"
+    assert body["message_text"] == "Hallo"
+
+
 # ---------- CLI (über Subprozess) ----------
 
 def _run_cli(*args, env_extra=None):
@@ -633,7 +662,12 @@ def test_cli_search_unknown_city():
     assert "error" in r.stderr
 
 
-def test_cli_send_without_confirm_exits_5():
+def test_cli_send_without_confirm_exits_5(tmp_path, monkeypatch):
+    p = tmp_path / "wg-gesucht-cli" / "session.json"
+    save_session(str(p), email="x@y.de", cookies=[{
+        "name": "PHPSESSID", "value": "abc", "domain": ".wg-gesucht.de", "path": "/"
+    }])
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     r = _run_cli("messages", "send", "--to", "13374505", "--text", "hi", "--json")
     assert r.returncode == 5
     assert "confirm_required" in r.stderr

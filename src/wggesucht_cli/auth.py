@@ -179,6 +179,8 @@ def restore_session(http: HttpClient, store_path: Optional[str] = None) -> dict:
     path = store_path or session_path()
     data = load_session(path)
     if not data:
-        raise AuthError("Keine Session gefunden", code="no_session")
+        raise AuthError(
+            "Login fehlt – `wggesucht login` ausführen", code="no_session"
+        )
     http.load_cookies(data["cookies"])
     return data

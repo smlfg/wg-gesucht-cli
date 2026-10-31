@@ -298,6 +298,7 @@ def _patch_send(monkeypatch):
         return {"ok": True, "an": to}
 
     monkeypatch.setattr(cli, "HttpClient", lambda: object())
+    monkeypatch.setattr(cli.messages, "ensure_session", lambda _http: {})
     monkeypatch.setattr(cli.messages, "send_message", _send)
     return calls
 
@@ -354,6 +355,56 @@ def test_send_interactive_eof_or_ctrl_c_sends_nothing(monkeypatch, capsys, error
     out = capsys.readouterr().out
     assert "Abgebrochen, nichts gesendet." in out
     assert calls == []
+
+
+def test_send_without_session_refuses_before_prompt(tmp_path, monkeypatch, capsys):
+    _tty_both(monkeypatch)
+    monkeypatch.setattr(cli, "_stderr_is_tty", lambda: True)
+    monkeypatch.setattr(auth, "session_path", lambda: str(tmp_path / "absent.json"))
+    monkeypatch.setattr("builtins.input", lambda: pytest.fail("keine Frage ohne Login"))
+    calls = []
+
+    class _Http:
+        def load_cookies(self, _jar):
+            calls.append("load")
+
+        def get(self, *_args, **_kwargs):
+            calls.append("get")
+
+        def post(self, *_args, **_kwargs):
+            calls.append("post")
+
+    monkeypatch.setattr(cli, "HttpClient", lambda: _Http())
+
+    with pytest.raises(SystemExit) as exc:
+        cli.main(["messages", "send", "--to", "9000002", "--text", "Hallo"])
+    assert exc.value.code == 2
+    captured = capsys.readouterr()
+    output = captured.out + captured.err
+    assert "[j/N]" not in output
+    assert "Login fehlt" in output
+    assert "wggesucht login" in output
+    assert calls == []
+
+
+@pytest.mark.parametrize("extra", [[], ["--confirm"]])
+def test_send_without_session_and_without_tty_exits_2(
+    tmp_path, monkeypatch, capsys, extra
+):
+    monkeypatch.setattr(cli, "_stdout_is_tty", lambda: False)
+    monkeypatch.setattr(cli, "_stdin_is_tty", lambda: False)
+    monkeypatch.setattr(cli, "_stderr_is_tty", lambda: False)
+    monkeypatch.setattr(auth, "session_path", lambda: str(tmp_path / "absent.json"))
+    monkeypatch.setattr("builtins.input", lambda: pytest.fail("keine Frage ohne Login"))
+    monkeypatch.setattr(cli, "HttpClient", lambda: object())
+
+    with pytest.raises(SystemExit) as exc:
+        cli.main(["messages", "send", "--to", "9000002", "--text", "Hallo", *extra])
+    assert exc.value.code == 2
+    captured = capsys.readouterr()
+    payload = json.loads(captured.err)
+    assert "wggesucht login" in payload["error"]
+    assert "wggesucht login" in payload["hint"]
 
 
 def test_send_without_tty_requires_confirm_without_request(monkeypatch, capsys):

@@ -500,9 +500,13 @@ def _confirm_send(args: argparse.Namespace) -> bool:
 
 
 def cmd_messages_send(args: argparse.Namespace) -> int:
+    http = HttpClient()
+    try:
+        messages.ensure_session(http)
+    except AuthError as e:
+        _err(str(e), code=2, kind=e.code, hint="wggesucht login")
     if not _confirm_send(args):
         return 0
-    http = HttpClient()
     try:
         res = messages.send_message(
             http, to=args.to, text=args.text, confirm=True

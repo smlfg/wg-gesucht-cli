@@ -165,7 +165,8 @@ def _format_messages_list(payload: dict) -> str:
 
 def _format_login(payload: dict) -> str:
     user = payload.get("user") or "unbekannt"
-    return f"Angemeldet als {user}.\n"
+    status = "true" if payload.get("ok") else "false"
+    return f'Angemeldet als {user}.\n"ok": {status}\n'
 
 
 def _format_messages_send(payload: dict) -> str:

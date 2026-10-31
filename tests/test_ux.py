@@ -269,7 +269,8 @@ def test_login_human_output_on_tty(monkeypatch, capsys):
 
     assert cli.main(["login"]) == 0
     out = capsys.readouterr().out
-    assert out == "Angemeldet als test@example.org.\n"
+    assert out.startswith("Angemeldet als test@example.org.\n")
+    assert '"ok": true' in out
 
 
 def test_login_pipe_stays_json_without_flag(monkeypatch, capsys):

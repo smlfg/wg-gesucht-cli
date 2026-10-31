@@ -257,3 +257,26 @@ def test_search_new_card_markup_on_tty(monkeypatch, capsys):
     assert "Angebot(e) in Stuttgart" in out
     assert "350 €" in out
     assert "ID 9000001" in out
+
+
+# ---------- login: lesbare Ausgabe ----------
+
+def test_login_human_output_on_tty(monkeypatch, capsys):
+    payload = {"ok": True, "user": "test@example.org", "user_id": "42"}
+    monkeypatch.setattr(cli, "HttpClient", lambda: object())
+    monkeypatch.setattr(cli.auth, "login", lambda **_kwargs: payload)
+    _tty_stdout(monkeypatch)
+
+    assert cli.main(["login"]) == 0
+    out = capsys.readouterr().out
+    assert out == "Angemeldet als test@example.org.\n"
+
+
+def test_login_pipe_stays_json_without_flag(monkeypatch, capsys):
+    payload = {"ok": True, "user": "test@example.org", "user_id": "42"}
+    monkeypatch.setattr(cli, "HttpClient", lambda: object())
+    monkeypatch.setattr(cli.auth, "login", lambda **_kwargs: payload)
+    monkeypatch.setattr(cli, "_stdout_is_tty", lambda: False)
+
+    assert cli.main(["login"]) == 0
+    assert json.loads(capsys.readouterr().out)["user"] == "test@example.org"

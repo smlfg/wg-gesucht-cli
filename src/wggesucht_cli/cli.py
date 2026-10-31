@@ -156,6 +156,11 @@ def _format_messages_list(payload: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _format_login(payload: dict) -> str:
+    user = payload.get("user") or "unbekannt"
+    return f"Angemeldet als {user}.\n"
+
+
 def _err(
     msg: str,
     *,
@@ -421,7 +426,7 @@ def cmd_login(args: argparse.Namespace) -> int:
         res = auth.login(http=http, env=os.environ, store_path=session_path())
     except AuthError as e:
         _err(str(e), code=2, kind=e.code)
-    _emit(res, args.json)
+    _emit(res, args.json, _format_login)
     return 0
 
 

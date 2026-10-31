@@ -18,6 +18,7 @@ try:
         PtySession,
         build_env,
         check_write,
+        free_local_port,
         install_fresh,
         run_session,
         strip_ansi,
@@ -36,6 +37,7 @@ except ImportError:  # pragma: no cover - Paketimport
         PtySession,
         build_env,
         check_write,
+        free_local_port,
         install_fresh,
         run_session,
         strip_ansi,
@@ -77,6 +79,7 @@ class Context:
     sub_help: dict[str, str] = field(default_factory=dict)
     servers: list = field(default_factory=list)
     ux05_transcripts: dict[str, str] = field(default_factory=dict)
+    port: int = 0
 
 
 def _row(rows: dict[str, CheckRow], cid: str, ok: bool, befund: str, details: str = "") -> None:
@@ -385,7 +388,7 @@ def _check_ux06(rows: dict[str, CheckRow], ctx: Context) -> None:
 
 
 def _new_server(ctx: Context) -> FakeServer:
-    server = FakeServer(ctx.spec, ctx.repo)
+    server = FakeServer(ctx.spec, ctx.repo, port=ctx.port)
     ctx.servers.append(server)
     return server
 
@@ -624,6 +627,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     home = tempfile.mkdtemp(prefix="ux-check-home-", dir=_scratch_tmp())
+    ctx.port = free_local_port()
     ctx.bin_dir = bin_dir
     ctx.env = build_env(spec, None, home, bin_dir, repo)
     help_result = _run([tool, "--help"], ctx.env, cwd=repo)

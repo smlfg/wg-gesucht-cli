@@ -9,6 +9,7 @@ import re
 import select
 import shutil
 import signal
+import socket
 import subprocess
 import sys
 import tempfile
@@ -25,6 +26,13 @@ except ImportError:  # pragma: no cover - Paketimport
 
 HARNESS_DIR = Path(__file__).resolve().parent
 DEFAULT_TIMEOUT = 20.0
+
+
+def free_local_port() -> int:
+    """Freien localhost-Port wählen, damit alle Sitzungen dieselbe Basis-URL sehen."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        return int(sock.getsockname()[1])
 
 
 class _AnsiStripper:
@@ -687,7 +695,8 @@ def main(argv: list[str] | None = None) -> int:
 
     home = tempfile.mkdtemp(prefix="ux-home-", dir=_scratch_dir())
     env = build_env(spec, None, home, bin_dir, repo)
-    server_factory = lambda: FakeServer(spec, repo)
+    port = free_local_port()
+    server_factory = lambda: FakeServer(spec, repo, port=port)
     rows: list[dict] = []
 
     for session in spec.sessions:

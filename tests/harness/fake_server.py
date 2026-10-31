@@ -78,9 +78,10 @@ def _extract_fields(content_type: str, body: bytes, query: str) -> set[str]:
 class FakeServer:
     """Kontextmanager um einen ThreadingHTTPServer auf 127.0.0.1:0."""
 
-    def __init__(self, spec: UxSpec, repo_dir: str | Path):
+    def __init__(self, spec: UxSpec, repo_dir: str | Path, port: int = 0):
         self.spec = spec
         self.repo_dir = Path(repo_dir)
+        self.port = int(port or 0)
         self.requests: list[Recorded] = []
         self.marks: dict[str, float] = {}
         self._lock = threading.Lock()
@@ -111,7 +112,7 @@ class FakeServer:
             do_PATCH = _run
             do_DELETE = _run
 
-        self._httpd = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        self._httpd = ThreadingHTTPServer(("127.0.0.1", self.port), Handler)
         self._httpd.daemon_threads = True
         port = self._httpd.server_address[1]
         self.base_url = f"http://127.0.0.1:{port}"
